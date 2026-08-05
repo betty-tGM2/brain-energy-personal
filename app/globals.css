@@ -53,6 +53,7 @@ body { font-family:Inter,-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Aria
 .brand-copy strong { font-family:inherit; font-size:15px; font-weight:650; letter-spacing:-.1px; }
 .brand-copy span { margin-top:4px; color:#758095; font-size:8px; letter-spacing:.12em; }
 .avatar { width:32px; height:32px; border-radius:5px; background:#eef1f5; color:#42506a; font-size:10px; }
+.language-toggle { margin-left:auto; min-width:42px; height:30px; padding:0 9px; border:1px solid #cbd3df; border-radius:4px; background:#fff; color:#244b86; font-size:10px; font-weight:650; cursor:pointer; }
 .today-page { padding-top:25px; }
 .day-heading { align-items:center; }
 .day-heading h1,.sub-page h1 { font-family:inherit; font-size:23px; line-height:1.25; font-weight:650; letter-spacing:-.35px; }
@@ -112,4 +113,13 @@ body { font-family:Inter,-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Aria
 .scale-buttons button { border-radius:4px; }
 .scale-buttons button.selected { border-color:#244b86; background:#244b86; }
 .range-field input,.toggle-field input { accent-color:#244b86; }
+.time-section { margin-bottom:6px; padding:13px 0 4px; border-top:1px solid #e1e5eb; }
+.field-label { display:block; margin-bottom:10px; color:#4c596f; font-size:11px; font-weight:650; }
+.time-section .text-field { margin-bottom:6px; }
+.computed-value { display:block; margin:4px 0 8px; color:#66738a; font-size:9px; }
+.available-time { margin-top:4px; padding-bottom:13px; }
+.duration-selects { display:grid; grid-template-columns:1fr 1fr; gap:12px; }
+.duration-selects label { display:flex; flex-direction:column; gap:6px; }
+.duration-selects label span { color:#6f7b8f; font-size:9px; font-weight:600; }
+.duration-selects select { width:100%; padding:11px 12px; border:1px solid #d8dee7; border-radius:5px; background:#fff; color:var(--ink); }
 @media (min-width:700px){.app-shell{border-radius:10px}.bottom-nav{border-radius:0 0 10px 10px}.sheet{border-radius:10px}}
