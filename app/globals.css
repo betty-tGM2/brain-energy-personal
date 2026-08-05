@@ -168,6 +168,10 @@ body { font-family:Inter,-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Aria
 .choice-buttons { display:grid; grid-template-columns:repeat(3,1fr); gap:7px; }
 .choice-buttons button { padding:10px 6px; border:1px solid #d4dbe5; border-radius:4px; background:#fff; color:#526077; font-size:9px; cursor:pointer; }
 .choice-buttons button.selected { border-color:#244b86; background:#244b86; color:#fff; }
+.constraint-field { margin-top:-1px; }
+.constraint-buttons { display:grid; grid-template-columns:1fr 1fr; gap:7px; }
+.constraint-buttons button { min-height:42px; padding:8px 10px; border:1px solid #d4dbe5; border-radius:4px; background:#fff; color:#526077; font-family:inherit; font-size:9px; font-weight:550; line-height:1.35; text-align:left; cursor:pointer; }
+.constraint-buttons button.selected { border-color:#244b86; background:#e9eff8; color:#244b86; box-shadow:inset 3px 0 #244b86; }
 .inference-note { margin:-4px 0 14px; padding:9px 10px; background:#eef2f7; color:#69768a; font-size:8px; line-height:1.5; }
 .time-section { margin-bottom:6px; padding:13px 0 4px; border-top:1px solid #e1e5eb; }
 .field-label { display:block; margin-bottom:10px; color:#4c596f; font-size:11px; font-weight:650; }
