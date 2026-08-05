@@ -38,3 +38,78 @@ h1,h2,h3,p { margin-top:0; }.day-heading h1,.sub-page h1 { margin:0; font-family
 @media (min-width:700px){ body{padding:24px 0}.app-shell{min-height:calc(100dvh - 48px);border-radius:32px}.bottom-nav{bottom:24px;border-radius:0 0 32px 32px}.sheet{margin-bottom:24px;border-radius:28px} }
 @media (max-width:390px){.day-heading{align-items:flex-start;flex-direction:column}.day-heading h1{font-size:31px}.checkin-pill{align-self:flex-end;margin-top:-42px}.capacity-card{padding:20px}.energy-orbit{width:88px;height:88px}.capacity-number strong{font-size:54px}}
 @media (prefers-reduced-motion:reduce){*{animation:none!important;scroll-behavior:auto!important}}
+
+/* Professional research-tool visual system */
+:root { --ink:#172033; --muted:#647086; --paper:#f4f6f8; --card:#ffffff; --sage:#2f5ea8; --sage-dark:#244b86; --line:#dce1e8; --yellow:#d7a928; }
+html { background:#e9edf2; }
+body { font-family:Inter,-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Arial,sans-serif; }
+.app-shell { background:var(--paper); box-shadow:0 0 0 1px #d9dee6; }
+.ambient { display:none; }
+.topbar { height:68px; padding:14px 20px; border-bottom:1px solid #d9dee6; background:#fff; }
+.brand-mark { width:34px; height:34px; margin-right:10px; border:0; border-radius:5px; background:#18365f; transform:none; color:#fff; }
+.brand-mark:before { content:"BE"; position:static; width:auto; height:auto; border:0; border-radius:0; transform:none; font-size:10px; font-weight:700; letter-spacing:.06em; }
+.brand-mark:after,.brand-mark span { display:none; }
+.brand-copy { line-height:1.1; }
+.brand-copy strong { font-family:inherit; font-size:15px; font-weight:650; letter-spacing:-.1px; }
+.brand-copy span { margin-top:4px; color:#758095; font-size:8px; letter-spacing:.12em; }
+.avatar { width:32px; height:32px; border-radius:5px; background:#eef1f5; color:#42506a; font-size:10px; }
+.today-page { padding-top:25px; }
+.day-heading { align-items:center; }
+.day-heading h1,.sub-page h1 { font-family:inherit; font-size:23px; line-height:1.25; font-weight:650; letter-spacing:-.35px; }
+.eyebrow,.card-kicker { margin-bottom:6px; color:#748096; font-size:9px; letter-spacing:.13em; }
+.checkin-pill { border-color:#c8d0dc; border-radius:6px; background:#fff; padding:7px 10px 7px 7px; font-size:10px; font-weight:600; }
+.checkin-pill span { width:22px; height:22px; border-radius:4px; background:#244b86; }
+.capacity-card { margin-top:21px; padding:20px; border-color:#d7dde6; border-radius:9px; background:#fff; box-shadow:none; }
+.capacity-card:after { display:none; }
+.capacity-number strong { font-family:inherit; font-size:52px; font-weight:600; letter-spacing:-2px; }
+.energy-orbit { width:88px; height:88px; padding:5px; background:conic-gradient(#2f5ea8 var(--capacity),#e3e7ed 0); }
+.energy-orbit:before { width:10px; height:10px; right:10px; top:5px; background:#d7a928; box-shadow:0 0 0 3px #fff; }
+.energy-orbit>div { background:#fff; }
+.energy-orbit b { font-family:inherit; font-size:13px; font-weight:600; }
+.energy-orbit span { font-size:7px; letter-spacing:.14em; }
+.capacity-note { margin:14px 0 13px; color:#657188; font-size:11px; }
+.signals { gap:6px; }
+.signals span { border:1px solid #dfe4eb; border-radius:4px; padding:5px 8px; background:#f5f7f9; color:#58657a; font-size:9px; }
+.section-title { margin-top:28px; }
+.section-title h2 { font-family:inherit; font-size:16px; font-weight:600; }
+.round-add { width:34px; height:34px; border-radius:5px; border-color:#cbd2dd; box-shadow:none; font-size:18px; }
+.load-card { border-radius:7px; border-color:#d8dee7; background:#f0f4f9; }
+.load-icon { width:25px; height:25px; border-radius:4px; background:#2f5ea8; }
+.load-track { background:#d9e0e9; }
+.load-track span { background:#2f5ea8; }
+.load-card.warning { background:#fff8e8; border-color:#dfc57b; }
+.load-card.warning .load-icon,.load-card.warning .load-track span { background:#9a6d00; }
+.task-list { gap:8px; }
+.task-card { padding:13px; border-radius:7px; border-color:#dce1e8; background:#fff; box-shadow:none; }
+.task-check { width:29px; height:29px; border-radius:4px; background:#f5f7f9; }
+.category { border-radius:3px; font-size:7px; }
+.task-main h3 { font-family:inherit; font-size:13px; font-weight:600; }
+.task-menu { padding:6px 8px; border:1px solid #d7dde5; border-radius:4px; background:#fff; color:#42516a; font-size:9px; }
+.reflection-banner { margin-top:14px; padding:14px; border:1px solid #223b5f; border-radius:7px; background:#18365f; }
+.reflection-banner .moon { width:31px; height:31px; border-radius:4px; background:#fff; color:#18365f; font-family:inherit; font-size:11px; font-weight:700; }
+.reflection-banner strong { font-family:inherit; font-size:11px; font-weight:600; }
+.reflection-banner small { color:#c2cede; }
+.bottom-nav { height:68px; border-top-color:#d6dce5; background:rgba(255,255,255,.96); }
+.bottom-nav button { gap:3px; color:#7a8597; }
+.bottom-nav button span { font-family:ui-monospace,SFMono-Regular,Menlo,monospace; font-size:9px; font-weight:600; }
+.bottom-nav button small { font-size:8px; }
+.bottom-nav button.active { color:#244b86; }
+.bottom-nav button.active span { width:30px; height:23px; border-radius:4px; background:#e6edf7; }
+.sub-page { padding-top:34px; }
+.sub-page h1 { font-size:24px; }
+.page-copy { margin:10px 0 22px; color:#616d82; font-size:11px; line-height:1.65; }
+.primary-button,.submit-button { border-radius:5px; background:#244b86; box-shadow:none; }
+.simple-list article,.model-card,.chart-card,.insight-card { border-radius:7px; background:#fff; }
+.simple-list strong,.model-card>strong,.insight-card>strong { font-family:inherit; font-weight:600; }
+.model-card>strong,.insight-card>strong { font-size:16px; }
+.model-progress i,.bars span.current { background:#2f5ea8; }
+.bars span { background:#dce3ec; border-radius:3px 3px 0 0; }
+.sheet { border-radius:10px 10px 0 0; background:#f7f8fa; }
+.sheet h2 { font-family:inherit; font-size:20px; font-weight:650; }
+.sheet-handle { background:#cdd3dc; }
+.sheet-close { border-radius:4px; }
+.field>input,.text-field input,.text-field select,.text-field textarea { border-radius:5px; }
+.scale-buttons button { border-radius:4px; }
+.scale-buttons button.selected { border-color:#244b86; background:#244b86; }
+.range-field input,.toggle-field input { accent-color:#244b86; }
+@media (min-width:700px){.app-shell{border-radius:10px}.bottom-nav{border-radius:0 0 10px 10px}.sheet{border-radius:10px}}

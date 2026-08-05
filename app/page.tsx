@@ -42,14 +42,15 @@ const defaultData: AppData = {
   checkIn: { sleep: 7.5, energy: 3, mood: 4, stress: 2, focus: 3, minutes: 300, exercise: false },
   checkedIn: false,
   tasks: [
-    { id: "sample-1", title: "完成研究方法作业", category: "学习", minutes: 90, energy: 28, status: "planned" },
-    { id: "sample-2", title: "法语听力练习", category: "语言", minutes: 30, energy: 12, status: "planned" },
-    { id: "sample-3", title: "晚饭后散步", category: "健康", minutes: 35, energy: 8, status: "planned" },
+    { id: "sample-1", title: "Complete research methods assignment", category: "Academic", minutes: 90, energy: 28, status: "planned" },
+    { id: "sample-2", title: "French listening practice", category: "Language", minutes: 30, energy: 12, status: "planned" },
+    { id: "sample-3", title: "Post-dinner walk", category: "Health", minutes: 35, energy: 8, status: "planned" },
   ],
   reflection: null,
 };
 
 const categoryColors: Record<string, string> = {
+  Academic: "lavender", Career: "sky", Health: "mint", Language: "peach", Life: "sand", Hobby: "rose",
   学习: "lavender",
   事业: "sky",
   健康: "mint",
@@ -65,7 +66,7 @@ function calculateCapacity(c: CheckIn) {
 }
 
 function todayLabel() {
-  return new Intl.DateTimeFormat("zh-CN", { month: "long", day: "numeric", weekday: "short" }).format(new Date());
+  return new Intl.DateTimeFormat("en-GB", { month: "long", day: "numeric", weekday: "short" }).format(new Date());
 }
 
 export default function Home() {
@@ -79,7 +80,16 @@ export default function Home() {
   useEffect(() => {
     const stored = window.localStorage.getItem("brain-energy-v1");
     if (stored) {
-      try { setData(JSON.parse(stored)); } catch { /* keep safe defaults */ }
+      try {
+        const parsed = JSON.parse(stored) as AppData;
+        const englishSamples: Record<string, Pick<Task, "title" | "category">> = {
+          "sample-1": { title: "Complete research methods assignment", category: "Academic" },
+          "sample-2": { title: "French listening practice", category: "Language" },
+          "sample-3": { title: "Post-dinner walk", category: "Health" },
+        };
+        parsed.tasks = parsed.tasks.map((task) => englishSamples[task.id] ? { ...task, ...englishSamples[task.id] } : task);
+        setData(parsed);
+      } catch { /* keep safe defaults */ }
     }
     setHydrated(true);
   }, []);
@@ -94,7 +104,7 @@ export default function Home() {
   const plannedMinutes = activeTasks.reduce((sum, task) => sum + task.minutes, 0);
   const completed = data.tasks.filter((task) => task.status === "completed").length;
   const loadRatio = Math.round((plannedEnergy / capacity) * 100);
-  const assessment = loadRatio > 100 ? "有点 ambitious" : loadRatio > 80 ? "接近上限" : "节奏刚刚好";
+  const assessment = loadRatio > 100 ? "Above estimated capacity" : loadRatio > 80 ? "Near estimated capacity" : "Within estimated capacity";
 
   function updateCheckIn(next: CheckIn) {
     setData((current) => ({ ...current, checkIn: next, checkedIn: true }));
@@ -123,16 +133,16 @@ export default function Home() {
 
       <header className="topbar">
         <div className="brand-mark" aria-hidden="true"><span /></div>
-        <div className="brand-copy"><strong>Brain Energy</strong><span>plan with your real capacity</span></div>
-        <button className="avatar" aria-label="个人设置">B</button>
+        <div className="brand-copy"><strong>Brain Energy</strong><span>Personal execution model</span></div>
+        <button className="avatar" aria-label="Profile and settings">BL</button>
       </header>
 
       {tab === "today" && (
         <section className="page today-page">
           <div className="day-heading">
-            <div><p className="eyebrow">{hydrated ? todayLabel() : "今天"}</p><h1>今天，和自己<br />站在同一边。</h1></div>
+            <div><p className="eyebrow">{hydrated ? todayLabel() : "TODAY"}</p><h1>Daily execution overview</h1></div>
             <button className={`checkin-pill ${data.checkedIn ? "done" : ""}`} onClick={() => setCheckInOpen(true)}>
-              <span>{data.checkedIn ? "✓" : "↗"}</span>{data.checkedIn ? "已记录状态" : "今日 Check-in"}
+              <span>{data.checkedIn ? "✓" : "+"}</span>{data.checkedIn ? "Check-in recorded" : "Daily check-in"}
             </button>
           </div>
 
@@ -140,58 +150,58 @@ export default function Home() {
             <div className="capacity-top">
               <div><p className="card-kicker">TODAY’S CAPACITY</p><div className="capacity-number"><strong>{capacity}</strong><span>/ 100</span></div></div>
               <div className="energy-orbit" style={{ "--capacity": `${capacity * 3.6}deg` } as React.CSSProperties}>
-                <div><span>ENERGY</span><b>{capacity >= 75 ? "充沛" : capacity >= 55 ? "平稳" : "轻缓"}</b></div>
+                <div><span>STATE</span><b>{capacity >= 75 ? "High" : capacity >= 55 ? "Moderate" : "Low"}</b></div>
               </div>
             </div>
-            <p className="capacity-note">{data.checkedIn ? "根据你今天的睡眠、压力和专注状态计算。" : "先花一分钟告诉我你今天的状态，预测会更准确。"}</p>
+            <p className="capacity-note">{data.checkedIn ? "Calculated from today's sleep, physical energy, mood, stress, and focus inputs." : "Complete the daily check-in to generate a state-based capacity estimate."}</p>
             <div className="signals">
-              <span>☾ {data.checkIn.sleep}h 睡眠</span><span>◉ 压力 {data.checkIn.stress}/5</span><span>⌁ 专注 {data.checkIn.focus}/5</span>
+              <span>Sleep {data.checkIn.sleep}h</span><span>Stress {data.checkIn.stress}/5</span><span>Focus {data.checkIn.focus}/5</span>
             </div>
           </article>
 
           <div className="section-title">
-            <div><p className="eyebrow">TODAY’S PLAN</p><h2>给今天留一点余地</h2></div>
-            <button className="round-add" aria-label="添加任务" onClick={() => setTaskOpen(true)}>＋</button>
+            <div><p className="eyebrow">TODAY’S PLAN</p><h2>Leave some margin in today’s plan</h2></div>
+            <button className="round-add" aria-label="Add task" onClick={() => setTaskOpen(true)}>＋</button>
           </div>
 
           <article className={`load-card ${loadRatio > 100 ? "warning" : ""}`}>
-            <div><span className="load-icon">{loadRatio > 100 ? "!" : "✓"}</span><div><strong>{assessment}</strong><p>{plannedEnergy} 能量 · {Math.round(plannedMinutes / 60 * 10) / 10} 小时</p></div></div>
+            <div><span className="load-icon">{loadRatio > 100 ? "!" : "✓"}</span><div><strong>{assessment}</strong><p>{plannedEnergy} energy · {Math.round(plannedMinutes / 60 * 10) / 10} hours</p></div></div>
             <span className="load-percent">{loadRatio}%</span>
             <div className="load-track"><span style={{ width: `${Math.min(loadRatio, 100)}%` }} /></div>
-            {loadRatio > 100 && <p className="warning-copy">这个计划可能比你今天的状态更有野心。可以继续，也可以为自己减轻一点。</p>}
+            {loadRatio > 100 && <p className="warning-copy">Planned energy exceeds today’s estimated capacity. This is advisory and does not block the plan.</p>}
           </article>
 
           <div className="task-list">
             {data.tasks.map((task, index) => (
               <article className={`task-card status-${task.status}`} key={task.id}>
-                <button className="task-check" aria-label={`${task.title} 状态`} onClick={() => setTaskStatus(task.id, task.status === "completed" ? "planned" : "completed")}>
+                <button className="task-check" aria-label={`${task.title} status`} onClick={() => setTaskStatus(task.id, task.status === "completed" ? "planned" : "completed")}>
                   {task.status === "completed" ? "✓" : index + 1}
                 </button>
                 <div className="task-main">
                   <span className={`category ${categoryColors[task.category] || "sand"}`}>{task.category}</span>
                   <h3>{task.title}</h3>
-                  <p>{task.minutes} 分钟 <i /> {task.energy} 能量</p>
+                  <p>{task.minutes} min <i /> {task.energy} energy</p>
                 </div>
-                <button className="task-menu" aria-label="任务操作" onClick={() => setTaskStatus(task.id, task.status === "started" ? "skipped" : "started")}>{task.status === "started" ? "跳过" : task.status === "skipped" ? "已跳过" : "开始"}</button>
+                <button className="task-menu" aria-label="Task action" onClick={() => setTaskStatus(task.id, task.status === "started" ? "skipped" : "started")}>{task.status === "started" ? "Skip" : task.status === "skipped" ? "Skipped" : "Start"}</button>
               </article>
             ))}
           </div>
 
           <button className="reflection-banner" onClick={() => setReflectionOpen(true)}>
-            <span className="moon">☾</span><span><strong>{data.reflection ? "今晚的复盘已保存" : "晚上回来看看今天"}</strong><small>{data.reflection ? `你给今天 ${data.reflection.rating}/5 分` : "不是评判，只是了解什么对你有帮助"}</small></span><b>→</b>
+            <span className="moon">R</span><span><strong>{data.reflection ? "Daily reflection recorded" : "Complete daily reflection"}</strong><small>{data.reflection ? `Overall day rating: ${data.reflection.rating}/5` : "Record outcomes and perceived capacity for model calibration."}</small></span><b>→</b>
           </button>
         </section>
       )}
 
-      {tab === "tasks" && <SimplePage eyebrow="TASK LIBRARY" title="所有任务" copy="任务是可以被安排的行动。把大任务拆到一天真正能完成的大小。" action="添加新任务" onAction={() => setTaskOpen(true)} items={data.tasks.map(t => `${t.title} · ${t.energy} 能量`)} />}
-      {tab === "ideas" && <SimplePage eyebrow="IDEA VAULT" title="想法不需要承诺" copy="先把灵感安全地放在这里。它们没有期限，也不会自动变成待办。" action="记录一个想法" items={["做一个交换旅行规划工具", "学习陶艺", "关于个人能量的播客选题"]} />}
+      {tab === "tasks" && <SimplePage eyebrow="TASK LIBRARY" title="Tasks" copy="Store actionable work with time and energy estimates. Divide large tasks into units that can be scheduled within one day." action="Add task" onAction={() => setTaskOpen(true)} items={data.tasks.map(t => `${t.title} · ${t.energy} energy`)} />}
+      {tab === "ideas" && <SimplePage eyebrow="IDEA VAULT" title="Ideas" copy="Store possible future ideas without deadlines or execution pressure. Ideas do not enter the task list unless explicitly promoted." action="Add idea" items={["Exchange travel planning tool", "Learn ceramics", "Research topic: personal capacity and execution"]} />}
       {tab === "history" && <HistoryPage capacity={capacity} completed={completed} total={data.tasks.length} />}
 
-      <nav className="bottom-nav" aria-label="主要导航">
-        <NavButton active={tab === "today"} icon="⌂" label="今天" onClick={() => setTab("today")} />
-        <NavButton active={tab === "tasks"} icon="◫" label="任务" onClick={() => setTab("tasks")} />
-        <NavButton active={tab === "ideas"} icon="◇" label="想法" onClick={() => setTab("ideas")} />
-        <NavButton active={tab === "history"} icon="↗" label="趋势" onClick={() => setTab("history")} />
+      <nav className="bottom-nav" aria-label="Primary navigation">
+        <NavButton active={tab === "today"} icon="01" label="Today" onClick={() => setTab("today")} />
+        <NavButton active={tab === "tasks"} icon="02" label="Tasks" onClick={() => setTab("tasks")} />
+        <NavButton active={tab === "ideas"} icon="03" label="Ideas" onClick={() => setTab("ideas")} />
+        <NavButton active={tab === "history"} icon="04" label="Analysis" onClick={() => setTab("history")} />
       </nav>
 
       {checkInOpen && <CheckInSheet initial={data.checkIn} onClose={() => setCheckInOpen(false)} onSave={updateCheckIn} />}
@@ -211,11 +221,11 @@ function SimplePage({ eyebrow, title, copy, action, items, onAction }: { eyebrow
 
 function HistoryPage({ capacity, completed, total }: { capacity: number; completed: number; total: number }) {
   const bars = [52, 68, 61, 79, 73, capacity, 0];
-  return <section className="page sub-page"><p className="eyebrow">YOUR PATTERNS</p><h1>慢慢认识自己</h1><p className="page-copy">模型只学习最近 30 个日历日。现在先忠实记录，不急着下结论。</p><article className="model-card"><span>30 DAY MODEL</span><strong>冷启动 · 收集中</strong><p>至少 10 个完整记录日后，才开始生成个人系数。</p><div className="model-progress"><i style={{ width: "10%" }} /></div><small>1 / 10 个有效记录日</small></article><article className="chart-card"><div><strong>最近 7 天容量</strong><span>平均 {Math.round(bars.filter(Boolean).reduce((a,b) => a+b, 0) / 6)}</span></div><div className="bars">{bars.map((height, i) => <span key={i} style={{ height: `${height || 8}%` }} className={i === 5 ? "current" : ""} />)}</div><div className="days">{["四","五","六","日","一","今","明"].map(d => <small key={d}>{d}</small>)}</div></article><article className="insight-card"><span>今天的事实</span><strong>{completed} / {total} 项完成</strong><p>这是执行记录，不是对你能力的评价。</p></article></section>;
+  return <section className="page sub-page"><p className="eyebrow">MODEL & ANALYSIS</p><h1>Execution patterns</h1><p className="page-copy">The personal model uses eligible observations from the most recent 30 calendar days. Historical records remain available but do not influence the active coefficients.</p><article className="model-card"><span>30-DAY ROLLING MODEL</span><strong>Cold start · collecting observations</strong><p>Personal coefficients will be estimated after at least 10 complete daily records.</p><div className="model-progress"><i style={{ width: "10%" }} /></div><small>1 / 10 eligible records</small></article><article className="chart-card"><div><strong>Capacity · last 7 days</strong><span>Mean {Math.round(bars.filter(Boolean).reduce((a,b) => a+b, 0) / 6)}</span></div><div className="bars">{bars.map((height, i) => <span key={i} style={{ height: `${height || 8}%` }} className={i === 5 ? "current" : ""} />)}</div><div className="days">{["Thu","Fri","Sat","Sun","Mon","Now","Next"].map(d => <small key={d}>{d}</small>)}</div></article><article className="insight-card"><span>TODAY’S RECORD</span><strong>{completed} / {total} tasks completed</strong><p>Execution outcome recorded for future analysis.</p></article></section>;
 }
 
 function Sheet({ title, intro, onClose, children }: { title: string; intro: string; onClose: () => void; children: React.ReactNode }) {
-  return <div className="sheet-backdrop" role="presentation" onMouseDown={(e) => e.target === e.currentTarget && onClose()}><section className="sheet" role="dialog" aria-modal="true" aria-label={title}><div className="sheet-handle" /><button className="sheet-close" onClick={onClose}>×</button><p className="eyebrow">DAILY PRACTICE</p><h2>{title}</h2><p className="sheet-intro">{intro}</p>{children}</section></div>;
+  return <div className="sheet-backdrop" role="presentation" onMouseDown={(e) => e.target === e.currentTarget && onClose()}><section className="sheet" role="dialog" aria-modal="true" aria-label={title}><div className="sheet-handle" /><button className="sheet-close" onClick={onClose}>×</button><p className="eyebrow">DATA ENTRY</p><h2>{title}</h2><p className="sheet-intro">{intro}</p>{children}</section></div>;
 }
 
 function Scale({ label, value, onChange, low, high }: { label: string; value: number; onChange: (v: number) => void; low: string; high: string }) {
@@ -224,15 +234,16 @@ function Scale({ label, value, onChange, low, high }: { label: string; value: nu
 
 function CheckInSheet({ initial, onClose, onSave }: { initial: CheckIn; onClose: () => void; onSave: (value: CheckIn) => void }) {
   const [form, setForm] = useState(initial);
-  return <Sheet title="你今天感觉怎么样？" intro="没有正确答案。用一分钟记录此刻真实的你。" onClose={onClose}><form onSubmit={(e) => { e.preventDefault(); onSave(form); }}><label className="field"><span><strong>睡了多久</strong><small>小时</small></span><input type="number" step="0.5" min="0" max="14" value={form.sleep} onChange={e => setForm({ ...form, sleep: Number(e.target.value) })} /></label><Scale label="身体能量" value={form.energy} low="很低" high="充沛" onChange={energy => setForm({ ...form, energy })} /><Scale label="心情" value={form.mood} low="低落" high="很好" onChange={mood => setForm({ ...form, mood })} /><Scale label="压力" value={form.stress} low="轻松" high="很高" onChange={stress => setForm({ ...form, stress })} /><Scale label="专注" value={form.focus} low="涣散" high="清晰" onChange={focus => setForm({ ...form, focus })} /><label className="field"><span><strong>今天可用时间</strong><small>分钟</small></span><input type="number" min="0" max="1440" value={form.minutes} onChange={e => setForm({ ...form, minutes: Number(e.target.value) })} /></label><label className="toggle-field"><span><strong>今天有运动吗？</strong><small>哪怕只是散步</small></span><input type="checkbox" checked={form.exercise} onChange={e => setForm({ ...form, exercise: e.target.checked })} /></label><button className="submit-button">生成今日容量 <span>→</span></button></form></Sheet>;
+  return <Sheet title="Daily check-in" intro="Record the variables used to estimate today’s execution capacity." onClose={onClose}><form onSubmit={(e) => { e.preventDefault(); onSave(form); }}><label className="field"><span><strong>Sleep duration</strong><small>hours</small></span><input type="number" step="0.5" min="0" max="14" value={form.sleep} onChange={e => setForm({ ...form, sleep: Number(e.target.value) })} /></label><Scale label="Physical energy" value={form.energy} low="Low" high="High" onChange={energy => setForm({ ...form, energy })} /><Scale label="Mood" value={form.mood} low="Low" high="High" onChange={mood => setForm({ ...form, mood })} /><Scale label="Stress" value={form.stress} low="Low" high="High" onChange={stress => setForm({ ...form, stress })} /><Scale label="Focus" value={form.focus} low="Low" high="High" onChange={focus => setForm({ ...form, focus })} /><label className="field"><span><strong>Available time</strong><small>minutes</small></span><input type="number" min="0" max="1440" value={form.minutes} onChange={e => setForm({ ...form, minutes: Number(e.target.value) })} /></label><label className="toggle-field"><span><strong>Exercise completed</strong><small>Any intentional physical activity</small></span><input type="checkbox" checked={form.exercise} onChange={e => setForm({ ...form, exercise: e.target.checked })} /></label><button className="submit-button">Calculate capacity <span>→</span></button></form></Sheet>;
 }
 
 function TaskSheet({ onClose, onSave }: { onClose: () => void; onSave: (task: Omit<Task, "id" | "status">) => void }) {
-  const [title, setTitle] = useState(""); const [category, setCategory] = useState("学习"); const [minutes, setMinutes] = useState(45); const [energy, setEnergy] = useState(15);
-  return <Sheet title="给今天加一件事" intro="估计它需要多少时间和能量，不用追求完美。" onClose={onClose}><form onSubmit={(e: FormEvent) => { e.preventDefault(); if (title.trim()) onSave({ title: title.trim(), category, minutes, energy }); }}><label className="text-field"><span>任务名称</span><input autoFocus required placeholder="例如：完成论文提纲" value={title} onChange={e => setTitle(e.target.value)} /></label><label className="text-field"><span>分类</span><select value={category} onChange={e => setCategory(e.target.value)}>{Object.keys(categoryColors).map(c => <option key={c}>{c}</option>)}</select></label><div className="field-row"><label className="text-field"><span>预计分钟</span><input type="number" min="5" value={minutes} onChange={e => setMinutes(Number(e.target.value))} /></label><label className="text-field"><span>预计能量</span><input type="number" min="1" max="100" value={energy} onChange={e => setEnergy(Number(e.target.value))} /></label></div><button className="submit-button">加入今日计划 <span>＋</span></button></form></Sheet>;
+  const [title, setTitle] = useState(""); const [category, setCategory] = useState("Academic"); const [minutes, setMinutes] = useState(45); const [energy, setEnergy] = useState(15);
+  const categories = ["Academic", "Career", "Health", "Language", "Life", "Hobby"];
+  return <Sheet title="Add task to today" intro="Estimate the time and energy required for this execution unit." onClose={onClose}><form onSubmit={(e: FormEvent) => { e.preventDefault(); if (title.trim()) onSave({ title: title.trim(), category, minutes, energy }); }}><label className="text-field"><span>Task title</span><input autoFocus required placeholder="e.g. Draft literature review outline" value={title} onChange={e => setTitle(e.target.value)} /></label><label className="text-field"><span>Category</span><select value={category} onChange={e => setCategory(e.target.value)}>{categories.map(c => <option key={c}>{c}</option>)}</select></label><div className="field-row"><label className="text-field"><span>Estimated minutes</span><input type="number" min="5" value={minutes} onChange={e => setMinutes(Number(e.target.value))} /></label><label className="text-field"><span>Estimated energy</span><input type="number" min="1" max="100" value={energy} onChange={e => setEnergy(Number(e.target.value))} /></label></div><button className="submit-button">Add to today’s plan <span>＋</span></button></form></Sheet>;
 }
 
 function ReflectionSheet({ initial, capacity, onClose, onSave }: { initial: Reflection | null; capacity: number; onClose: () => void; onSave: (r: Reflection) => void }) {
   const [rating, setRating] = useState(initial?.rating || 3); const [perceived, setPerceived] = useState(initial?.perceivedCapacity || capacity); const [note, setNote] = useState(initial?.note || "");
-  return <Sheet title="今天真实地发生了什么？" intro="复盘不是打分。它帮助未来的计划更懂你。" onClose={onClose}><form onSubmit={e => { e.preventDefault(); onSave({ rating, perceivedCapacity: perceived, note, savedAt: new Date().toISOString() }); }}><Scale label="今天整体感受" value={rating} low="很难" high="很好" onChange={setRating} /><label className="range-field"><span><strong>回头看，实际容量</strong><b>{perceived}/100</b></span><input type="range" min="0" max="100" value={perceived} onChange={e => setPerceived(Number(e.target.value))} /></label><label className="text-field"><span>有什么帮助了你，或阻碍了你？</span><textarea rows={4} value={note} onChange={e => setNote(e.target.value)} placeholder="可选。写给未来的自己……" /></label><button className="submit-button">保存今晚的观察 <span>✓</span></button></form></Sheet>;
+  return <Sheet title="Daily reflection" intro="Record execution outcomes and a retrospective capacity estimate for model calibration." onClose={onClose}><form onSubmit={e => { e.preventDefault(); onSave({ rating, perceivedCapacity: perceived, note, savedAt: new Date().toISOString() }); }}><Scale label="Overall day rating" value={rating} low="Low" high="High" onChange={setRating} /><label className="range-field"><span><strong>Retrospective capacity</strong><b>{perceived}/100</b></span><input type="range" min="0" max="100" value={perceived} onChange={e => setPerceived(Number(e.target.value))} /></label><label className="text-field"><span>Relevant factors or exceptions</span><textarea rows={4} value={note} onChange={e => setNote(e.target.value)} placeholder="Optional notes for later analysis" /></label><button className="submit-button">Save reflection <span>✓</span></button></form></Sheet>;
 }
