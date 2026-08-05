@@ -24,6 +24,7 @@ type Task = {
   energy: number;
   urgency: 1 | 2 | 3;
   createdAt: string;
+  completedAt?: string;
   status: Status;
 };
 
@@ -44,14 +45,18 @@ type Reflection = {
 };
 
 type AppData = {
+  days: Record<string, DayRecord>;
+  ideas: Idea[];
+};
+
+type DayRecord = {
   checkIn: CheckIn;
   checkedIn: boolean;
   tasks: Task[];
-  ideas: Idea[];
   reflection: Reflection | null;
 };
 
-const defaultData: AppData = {
+const defaultDay: DayRecord = {
   checkIn: { sleepStart: "23:30", sleepEnd: "07:00", sleep: 7.5, energy: 3, mood: 4, stress: 2, focus: 3, minutes: 300 },
   checkedIn: false,
   tasks: [
@@ -59,12 +64,24 @@ const defaultData: AppData = {
     { id: "sample-2", title: "French listening practice", category: "Language", minutes: 30, energy: 12, urgency: 2, createdAt: "2026-08-05T08:01:00.000Z", status: "planned" },
     { id: "sample-3", title: "Post-dinner walk", category: "Health", minutes: 35, energy: 8, urgency: 1, createdAt: "2026-08-05T08:02:00.000Z", status: "planned" },
   ],
-  ideas: [
-    { id: "idea-1", title: "Exchange travel planning tool", description: "Explore constraints and possible user workflows.", category: "Product", createdAt: "2026-08-05T09:00:00.000Z" },
-    { id: "idea-2", title: "Learn ceramics", description: "Find an introductory course for a future term.", category: "Learning", createdAt: "2026-08-05T09:01:00.000Z" },
-  ],
   reflection: null,
 };
+
+const defaultIdeas: Idea[] = [
+    { id: "idea-1", title: "Exchange travel planning tool", description: "Explore constraints and possible user workflows.", category: "Product", createdAt: "2026-08-05T09:00:00.000Z" },
+    { id: "idea-2", title: "Learn ceramics", description: "Find an introductory course for a future term.", category: "Learning", createdAt: "2026-08-05T09:01:00.000Z" },
+];
+
+function dateKey(date = new Date()) {
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, "0");
+  const day = String(date.getDate()).padStart(2, "0");
+  return `${year}-${month}-${day}`;
+}
+
+function freshData(): AppData {
+  return { days: { [dateKey()]: structuredClone(defaultDay) }, ideas: structuredClone(defaultIdeas) };
+}
 
 const categoryColors: Record<string, string> = {
   Academic: "lavender", Career: "sky", Health: "mint", Language: "peach", Life: "sand", Hobby: "rose",
@@ -131,7 +148,8 @@ function sleepDuration(start: string, end: string) {
   const [endHour, endMinute] = end.split(":").map(Number);
   const startTotal = startHour * 60 + startMinute;
   let endTotal = endHour * 60 + endMinute;
-  if (endTotal <= startTotal) endTotal += 24 * 60;
+  if (endTotal === startTotal) return 0;
+  if (endTotal < startTotal) endTotal += 24 * 60;
   return Math.round(((endTotal - startTotal) / 60) * 10) / 10;
 }
 
@@ -149,7 +167,7 @@ function todayLabel(language: "en" | "zh") {
 export default function Home() {
   const [language, setLanguage] = useState<"en" | "zh">("en");
   const [tab, setTab] = useState<Tab>("today");
-  const [data, setData] = useState<AppData>(defaultData);
+  const [data, setData] = useState<AppData>(() => freshData());
   const [hydrated, setHydrated] = useState(false);
   const [checkInOpen, setCheckInOpen] = useState(false);
   const [taskOpen, setTaskOpen] = useState(false);
@@ -164,20 +182,24 @@ export default function Home() {
     const stored = window.localStorage.getItem("brain-energy-v1");
     if (stored) {
       try {
-        const parsed = JSON.parse(stored) as AppData;
-        if (!parsed.checkIn.sleepStart || !parsed.checkIn.sleepEnd) {
-          const inferred = inferSleepTimes(parsed.checkIn.sleep || 7.5);
-          parsed.checkIn = { ...parsed.checkIn, ...inferred };
+        const raw = JSON.parse(stored) as AppData & Partial<DayRecord>;
+        const parsed: AppData = raw.days ? raw : { days: { [dateKey()]: { checkIn: raw.checkIn!, checkedIn: Boolean(raw.checkedIn), tasks: raw.tasks || [], reflection: raw.reflection || null } }, ideas: raw.ideas || defaultIdeas };
+        const previousDay=Object.entries(parsed.days).sort(([a],[b])=>b.localeCompare(a))[0]?.[1];
+        const current = parsed.days[dateKey()] || { ...structuredClone(defaultDay), checkIn: previousDay?.checkIn || structuredClone(defaultDay.checkIn), tasks: [] };
+        if (!current.checkIn.sleepStart || !current.checkIn.sleepEnd) {
+          const inferred = inferSleepTimes(current.checkIn.sleep || 7.5);
+          current.checkIn = { ...current.checkIn, ...inferred };
         }
-        parsed.checkIn.sleep = sleepDuration(parsed.checkIn.sleepStart, parsed.checkIn.sleepEnd);
-        if (parsed.reflection && typeof parsed.reflection.exercised !== "boolean") parsed.reflection.exercised = false;
+        current.checkIn.sleep = sleepDuration(current.checkIn.sleepStart, current.checkIn.sleepEnd);
+        if (current.reflection && typeof current.reflection.exercised !== "boolean") current.reflection.exercised = false;
         const englishSamples: Record<string, Pick<Task, "title" | "category">> = {
           "sample-1": { title: "Complete research methods assignment", category: "Academic" },
           "sample-2": { title: "French listening practice", category: "Language" },
           "sample-3": { title: "Post-dinner walk", category: "Health" },
         };
-        parsed.tasks = parsed.tasks.map((task, index) => ({ ...task, ...(englishSamples[task.id] || {}), urgency: task.urgency || 2, createdAt: task.createdAt || new Date(Date.now() + index * 1000).toISOString() }));
-        if (!Array.isArray(parsed.ideas)) parsed.ideas = defaultData.ideas;
+        current.tasks = current.tasks.map((task, index) => ({ ...task, ...(englishSamples[task.id] || {}), urgency: task.urgency || 2, createdAt: task.createdAt || new Date(Date.now() + index * 1000).toISOString() }));
+        parsed.days[dateKey()] = current;
+        if (!Array.isArray(parsed.ideas)) parsed.ideas = defaultIdeas;
         setData(parsed);
       } catch { /* keep safe defaults */ }
     }
@@ -192,20 +214,26 @@ export default function Home() {
     if (hydrated) window.localStorage.setItem("brain-energy-language", language);
   }, [language, hydrated]);
 
-  const capacity = calculateCapacity(data.checkIn);
-  const activeTasks = data.tasks.filter((task) => task.status !== "skipped");
+  const today = dateKey();
+  const day = data.days[today] || defaultDay;
+  const capacity = calculateCapacity(day.checkIn);
+  const activeTasks = day.tasks.filter((task) => task.status !== "skipped");
   const plannedEnergy = activeTasks.reduce((sum, task) => sum + task.energy, 0);
   const plannedMinutes = activeTasks.reduce((sum, task) => sum + task.minutes, 0);
-  const completed = data.tasks.filter((task) => task.status === "completed").length;
-  const completedEnergy = data.tasks.filter((task) => task.status === "completed").reduce((sum, task) => sum + task.energy, 0);
+  const completed = day.tasks.filter((task) => task.status === "completed").length;
+  const completedEnergy = day.tasks.filter((task) => task.status === "completed").reduce((sum, task) => sum + task.energy, 0);
+  const completedMinutes = day.tasks.filter((task) => task.status === "completed").reduce((sum, task) => sum + task.minutes, 0);
   const remainingEnergy = Math.max(0, capacity - completedEnergy);
-  const unfinishedTasks = data.tasks.filter((task) => task.status === "planned" || task.status === "started");
+  const remainingMinutes = Math.max(0, day.checkIn.minutes - completedMinutes);
+  const unfinishedTasks = day.tasks.filter((task) => task.status === "planned" || task.status === "started");
   let fitEnergy = 0;
-  const tasksThatFit = [...unfinishedTasks].sort((a, b) => a.energy - b.energy).filter((task) => {
-    if (fitEnergy + task.energy > remainingEnergy) return false;
-    fitEnergy += task.energy;
+  let fitMinutes = 0;
+  const fittingTasks = [...unfinishedTasks].sort((a, b) => b.urgency - a.urgency || a.energy - b.energy).filter((task) => {
+    if (fitEnergy + task.energy > remainingEnergy || fitMinutes + task.minutes > remainingMinutes) return false;
+    fitEnergy += task.energy; fitMinutes += task.minutes;
     return true;
-  }).length;
+  });
+  const tasksThatFit = fittingTasks.length;
   const usedRatio = Math.min(100, Math.round((completedEnergy / capacity) * 100));
   const loadRatio = Math.round((plannedEnergy / capacity) * 100);
   const zh = language === "zh";
@@ -216,22 +244,21 @@ export default function Home() {
       : (zh ? "在预计容量范围内" : "Within estimated capacity");
 
   function updateCheckIn(next: CheckIn) {
-    setData((current) => ({ ...current, checkIn: next, checkedIn: true }));
+    setData((current) => ({ ...current, days: { ...current.days, [today]: { ...(current.days[today] || structuredClone(defaultDay)), checkIn: next, checkedIn: true } } }));
     setCheckInOpen(false);
   }
 
   function saveTask(task: Omit<Task, "id" | "status" | "createdAt">) {
-    setData((current) => ({ ...current, tasks: editingTask
-      ? current.tasks.map((item) => item.id === editingTask.id ? { ...item, ...task } : item)
-      : [...current.tasks, { ...task, id: crypto.randomUUID(), createdAt: new Date().toISOString(), status: "planned" }],
-    }));
+    setData((current) => { const record=current.days[today]||structuredClone(defaultDay); return ({ ...current, days:{...current.days,[today]:{...record,tasks: editingTask
+      ? record.tasks.map((item) => item.id === editingTask.id ? { ...item, ...task } : item)
+      : [...record.tasks, { ...task, id: crypto.randomUUID(), createdAt: new Date().toISOString(), status: "planned" }]}} }); });
     setTaskOpen(false);
     setEditingTask(null);
   }
 
   function openTaskEditor(task?: Task) { setEditingTask(task || null); setTaskOpen(true); }
   function deleteTask(id: string) {
-    if (window.confirm(zh ? "删除这个任务？此操作无法撤销。" : "Delete this task? This cannot be undone.")) setData(current => ({ ...current, tasks: current.tasks.filter(task => task.id !== id) }));
+    if (window.confirm(zh ? "删除这个任务？此操作无法撤销。" : "Delete this task? This cannot be undone.")) setData(current => { const record=current.days[today]; return ({ ...current, days:{...current.days,[today]:{...record,tasks:record.tasks.filter(task=>task.id!==id)}} }); });
   }
   function saveIdea(idea: Omit<Idea, "id" | "createdAt">) {
     setData(current => ({ ...current, ideas: editingIdea
@@ -246,10 +273,7 @@ export default function Home() {
   }
 
   function setTaskStatus(id: string, status: Status) {
-    setData((current) => ({
-      ...current,
-      tasks: current.tasks.map((task) => task.id === id ? { ...task, status } : task),
-    }));
+    setData((current) => { const record=current.days[today]; return ({ ...current, days:{...current.days,[today]:{...record,tasks:record.tasks.map(task=>task.id===id?{...task,status,completedAt:status==="completed"?new Date().toISOString():undefined}:task)}} }); });
   }
 
   const categoryZh: Record<string, string> = { Academic: "学业", Career: "事业", Health: "健康", Language: "语言", Life: "生活", Hobby: "兴趣" };
@@ -270,8 +294,8 @@ export default function Home() {
         <section className="page today-page">
           <div className="day-heading">
             <div><p className="eyebrow">{hydrated ? todayLabel(language) : (zh ? "今天" : "TODAY")}</p><h1>{zh ? "每日执行概览" : "Daily execution overview"}</h1></div>
-            <button className={`checkin-pill ${data.checkedIn ? "done" : ""}`} onClick={() => setCheckInOpen(true)}>
-              <span>{data.checkedIn ? "✓" : "+"}</span>{data.checkedIn ? (zh ? "已完成状态记录" : "Check-in recorded") : (zh ? "晨间状态记录" : "Daily check-in")}
+            <button className={`checkin-pill ${day.checkedIn ? "done" : ""}`} onClick={() => setCheckInOpen(true)}>
+              <span>{day.checkedIn ? "✓" : "+"}</span>{day.checkedIn ? (zh ? "已完成状态记录" : "Check-in recorded") : (zh ? "晨间状态记录" : "Daily check-in")}
             </button>
           </div>
 
@@ -282,9 +306,9 @@ export default function Home() {
                 <div><span>{zh ? "状态" : "STATE"}</span><b>{capacity >= 75 ? (zh ? "高" : "High") : capacity >= 55 ? (zh ? "中等" : "Moderate") : (zh ? "低" : "Low")}</b></div>
               </div>
             </div>
-            <p className="capacity-note">{data.checkedIn ? (zh ? "根据睡眠时长、入睡和起床时间，以及今天的身体能量、心情、压力和专注度计算。" : "Calculated from sleep duration, bedtime, wake time, physical energy, mood, stress, and focus.") : (zh ? "完成晨间状态记录以生成今日容量估计。" : "Complete the daily check-in to generate a state-based capacity estimate.")}</p>
+            <p className="capacity-note">{day.checkedIn ? (zh ? "根据睡眠时长、入睡和起床时间，以及今天的身体能量、心情、压力和专注度计算。" : "Calculated from sleep duration, bedtime, wake time, physical energy, mood, stress, and focus.") : (zh ? "完成晨间状态记录以生成今日容量估计。" : "Complete the daily check-in to generate a state-based capacity estimate.")}</p>
             <div className="signals">
-              <span>{zh ? "睡眠" : "Sleep"} {data.checkIn.sleepStart}–{data.checkIn.sleepEnd} ({data.checkIn.sleep}h)</span><span>{zh ? "睡眠时段贡献" : "Timing effect"} {sleepTimingContribution(data.checkIn) >= 0 ? "+" : ""}{sleepTimingContribution(data.checkIn)}</span><span>{zh ? "压力" : "Stress"} {data.checkIn.stress}/5</span><span>{zh ? "专注" : "Focus"} {data.checkIn.focus}/5</span>
+              <span>{zh ? "睡眠" : "Sleep"} {day.checkIn.sleepStart}–{day.checkIn.sleepEnd} ({day.checkIn.sleep}h)</span><span>{zh ? "睡眠时段贡献" : "Timing effect"} {sleepTimingContribution(day.checkIn) >= 0 ? "+" : ""}{sleepTimingContribution(day.checkIn)}</span><span>{zh ? "压力" : "Stress"} {day.checkIn.stress}/5</span><span>{zh ? "专注" : "Focus"} {day.checkIn.focus}/5</span>
             </div>
           </article>
 
@@ -297,12 +321,12 @@ export default function Home() {
             <div className="remaining-summary"><span className="load-icon">E</span><div><small>{zh ? "今日剩余能量" : "ENERGY REMAINING"}</small><strong>{remainingEnergy}<em> / {capacity}</em></strong></div></div>
             <span className="used-label">{zh ? `已使用 ${completedEnergy}` : `${completedEnergy} used`}</span>
             <div className="load-track used-track"><span style={{ width: `${usedRatio}%` }} /></div>
-            <div className="task-fit"><strong>{unfinishedTasks.length === 0 ? (zh ? "今日计划已处理完毕" : "No unfinished tasks") : (zh ? `预计还可完成 ${tasksThatFit} / ${unfinishedTasks.length} 项任务` : `Estimated room for ${tasksThatFit} of ${unfinishedTasks.length} unfinished tasks`)}</strong><p>{zh ? "按剩余任务的能量估计；实际消耗可在复盘中校准。" : "Based on estimated task energy; actual usage is calibrated in reflection."}</p></div>
+            <div className="task-fit"><strong>{unfinishedTasks.length === 0 ? (zh ? "今日计划已处理完毕" : "No unfinished tasks") : (zh ? `预计还可完成 ${tasksThatFit} / ${unfinishedTasks.length} 项任务` : `Estimated room for ${tasksThatFit} of ${unfinishedTasks.length} unfinished tasks`)}</strong><p>{zh ? `剩余 ${remainingEnergy} 能量 · ${remainingMinutes} 分钟。按紧急程度优先，同时满足时间和能量限制。` : `${remainingEnergy} energy · ${remainingMinutes} min remaining. Prioritized by urgency while respecting both limits.`}</p>{fittingTasks.length>0&&<p className="fit-names">{zh?"建议组合":"Likely fit"}: {fittingTasks.map(task=>zh?(sampleTitleZh[task.id]||task.title):task.title).join(" + ")}</p>}</div>
             <div className={`plan-load ${loadRatio > 100 ? "over" : ""}`}><span>{zh ? "计划总负载" : "Plan load"}</span><b>{plannedEnergy} / {capacity} · {loadRatio}%</b><small>{assessmentLabel} · {Math.round(plannedMinutes / 60 * 10) / 10}h</small></div>
           </article>
 
           <div className="task-list">
-            {data.tasks.map((task, index) => (
+            {day.tasks.map((task, index) => (
               <article className={`task-card status-${task.status}`} key={task.id}>
                 <button className="task-check" aria-label={`${task.title} status`} onClick={() => setTaskStatus(task.id, task.status === "completed" ? "planned" : "completed")}>
                   {task.status === "completed" ? "✓" : index + 1}
@@ -312,20 +336,20 @@ export default function Home() {
                   <h3>{zh ? (sampleTitleZh[task.id] || task.title) : task.title}</h3>
                   <p>{task.minutes} {zh ? "分钟" : "min"} <i /> {task.energy} {zh ? "能量" : "energy"} <i /> {zh ? "紧急度" : "urgency"} {task.urgency}/3</p>
                 </div>
-                <div className="task-actions">{task.status !== "completed" && <button onClick={() => setTaskStatus(task.id, task.status === "started" ? "skipped" : "started")}>{task.status === "started" ? (zh ? "跳过" : "Skip") : task.status === "skipped" ? (zh ? "已跳过" : "Skipped") : (zh ? "开始" : "Start")}</button>}<TaskOverflowMenu language={language} onEdit={() => openTaskEditor(task)} onDelete={() => deleteTask(task.id)} /></div>
+                <div className="task-actions">{task.status !== "completed" && task.status !== "skipped" && <button onClick={() => setTaskStatus(task.id, task.status === "started" ? "completed" : "started")}>{task.status === "started" ? (zh ? "完成" : "Complete") : (zh ? "开始" : "Start")}</button>}<TaskOverflowMenu language={language} skipped={task.status==="skipped"} onSkip={() => setTaskStatus(task.id, task.status==="skipped"?"planned":"skipped")} onEdit={() => openTaskEditor(task)} onDelete={() => deleteTask(task.id)} /></div>
               </article>
             ))}
           </div>
 
           <button className="reflection-banner" onClick={() => setReflectionOpen(true)}>
-            <span className="moon">R</span><span><strong>{data.reflection ? (zh ? "晚间复盘已记录" : "Daily reflection recorded") : (zh ? "完成晚间复盘" : "Complete daily reflection")}</strong><small>{data.reflection ? (zh ? `今日整体评分：${data.reflection.rating}/5` : `Overall day rating: ${data.reflection.rating}/5`) : (zh ? "记录执行结果和感知容量，用于模型校准。" : "Record outcomes and perceived capacity for model calibration.")}</small></span><b>→</b>
+            <span className="moon">R</span><span><strong>{day.reflection ? (zh ? "晚间复盘已记录" : "Daily reflection recorded") : (zh ? "完成晚间复盘" : "Complete daily reflection")}</strong><small>{day.reflection ? (zh ? `今日整体评分：${day.reflection.rating}/5` : `Overall day rating: ${day.reflection.rating}/5`) : (zh ? "记录执行结果和感知容量，用于模型校准。" : "Record outcomes and perceived capacity for model calibration.")}</small></span><b>→</b>
           </button>
         </section>
       )}
 
-      {tab === "tasks" && <TasksPage tasks={data.tasks} language={language} onAdd={() => openTaskEditor()} onEdit={openTaskEditor} onDelete={deleteTask} />}
+      {tab === "tasks" && <TasksPage tasks={day.tasks} language={language} onAdd={() => openTaskEditor()} onEdit={openTaskEditor} onDelete={deleteTask} />}
       {tab === "ideas" && <IdeasPage ideas={data.ideas} language={language} onAdd={() => openIdeaEditor()} onEdit={openIdeaEditor} onDelete={deleteIdea} />}
-      {tab === "history" && <HistoryPage capacity={capacity} completed={completed} total={data.tasks.length} checkIn={data.checkIn} language={language} />}
+      {tab === "history" && <HistoryPage data={data} language={language} onImport={setData} />}
 
       <nav className="bottom-nav" aria-label="Primary navigation">
         <NavButton active={tab === "today"} icon="01" label={zh ? "今天" : "Today"} onClick={() => setTab("today")} />
@@ -334,10 +358,10 @@ export default function Home() {
         <NavButton active={tab === "history"} icon="04" label={zh ? "分析" : "Analysis"} onClick={() => setTab("history")} />
       </nav>
 
-      {checkInOpen && <CheckInSheet initial={data.checkIn} language={language} onClose={() => setCheckInOpen(false)} onSave={updateCheckIn} />}
+      {checkInOpen && <CheckInSheet initial={day.checkIn} language={language} onClose={() => setCheckInOpen(false)} onSave={updateCheckIn} />}
       {taskOpen && <TaskSheet initial={editingTask} language={language} onClose={() => { setTaskOpen(false); setEditingTask(null); }} onSave={saveTask} />}
       {ideaOpen && <IdeaSheet initial={editingIdea} language={language} onClose={() => { setIdeaOpen(false); setEditingIdea(null); }} onSave={saveIdea} />}
-      {reflectionOpen && <ReflectionSheet initial={data.reflection} capacity={capacity} completedEnergy={completedEnergy} completedCount={completed} totalCount={activeTasks.length} language={language} onClose={() => setReflectionOpen(false)} onSave={(reflection) => { setData(current => ({ ...current, reflection })); setReflectionOpen(false); }} />}
+      {reflectionOpen && <ReflectionSheet initial={day.reflection} capacity={capacity} completedEnergy={completedEnergy} completedCount={completed} totalCount={activeTasks.length} latestCompletedAt={day.tasks.map(task=>task.completedAt||"").sort().at(-1)||""} language={language} onClose={() => setReflectionOpen(false)} onSave={(reflection) => { setData(current => ({ ...current, days:{...current.days,[today]:{...(current.days[today]||structuredClone(defaultDay)),reflection}} })); setReflectionOpen(false); }} />}
     </main>
   );
 }
@@ -346,9 +370,9 @@ function NavButton({ active, icon, label, onClick }: { active: boolean; icon: st
   return <button className={active ? "active" : ""} onClick={onClick}><span>{icon}</span><small>{label}</small></button>;
 }
 
-function TaskOverflowMenu({ language, onEdit, onDelete }: { language:"en"|"zh"; onEdit:()=>void; onDelete:()=>void }) {
+function TaskOverflowMenu({ language, skipped=false, onSkip, onEdit, onDelete }: { language:"en"|"zh"; skipped?:boolean; onSkip?:()=>void; onEdit:()=>void; onDelete:()=>void }) {
   const [open,setOpen]=useState(false); const zh=language==="zh";
-  return <div className="overflow-menu"><button className="ellipsis" aria-label={zh?"更多任务操作":"More task actions"} aria-expanded={open} onClick={()=>setOpen(!open)}>•••</button>{open&&<div className="menu-popover"><button onClick={()=>{setOpen(false);onEdit();}}>{zh?"编辑任务":"Edit task"}</button><button className="danger" onClick={()=>{setOpen(false);onDelete();}}>{zh?"删除任务":"Delete task"}</button></div>}</div>;
+  return <div className="overflow-menu"><button className="ellipsis" aria-label={zh?"更多任务操作":"More task actions"} aria-expanded={open} onClick={()=>setOpen(!open)}>•••</button>{open&&<div className="menu-popover"><button onClick={()=>{setOpen(false);onEdit();}}>{zh?"编辑任务":"Edit task"}</button>{onSkip&&<button onClick={()=>{setOpen(false);onSkip();}}>{skipped?(zh?"恢复任务":"Restore task"):(zh?"跳过任务":"Skip task")}</button>}<button className="danger" onClick={()=>{setOpen(false);onDelete();}}>{zh?"删除任务":"Delete task"}</button></div>}</div>;
 }
 
 function TasksPage({ tasks, language, onAdd, onEdit, onDelete }: { tasks: Task[]; language: "en" | "zh"; onAdd: () => void; onEdit: (task: Task) => void; onDelete: (id: string) => void }) {
@@ -364,11 +388,20 @@ function IdeasPage({ ideas, language, onAdd, onEdit, onDelete }: { ideas: Idea[]
   return <section className="page sub-page"><p className="eyebrow">{zh?"想法库":"IDEA VAULT"}</p><h1>{zh?"想法":"Ideas"}</h1><p className="page-copy">{zh?"保存未来可能推进的想法。想法没有紧急程度，也不会自动成为任务。":"Store possible future ideas. Ideas have no urgency and do not automatically become tasks."}</p><button className="primary-button" onClick={onAdd}>{zh?"添加想法":"Add idea"}<span>＋</span></button><div className="list-controls"><label><span>{zh?"筛选":"Filter"}</span><select value={filter} onChange={e=>setFilter(e.target.value)}><option value="All">{zh?"全部分类":"All categories"}</option>{categories.map(c=><option key={c}>{c}</option>)}</select></label><label><span>{zh?"排序":"Sort"}</span><select value={sort} onChange={e=>setSort(e.target.value)}><option value="created">{zh?"添加时间":"Date added"}</option><option value="category">{zh?"分类":"Category"}</option></select></label></div><div className="management-list">{visible.map(idea=><article key={idea.id}><div className="management-head"><span className="category sky">{idea.category}</span></div><h3>{idea.title}</h3>{idea.description&&<p>{idea.description}</p>}<div className="row-actions"><button onClick={()=>onEdit(idea)}>{zh?"编辑":"Edit"}</button><button className="danger" onClick={()=>onDelete(idea.id)}>{zh?"删除":"Delete"}</button></div></article>)}</div></section>;
 }
 
-function HistoryPage({ capacity, completed, total, checkIn, language }: { capacity: number; completed: number; total: number; checkIn: CheckIn; language: "en" | "zh" }) {
-  const bars = [52, 68, 61, 79, 73, capacity, 0];
-  const zh = language === "zh";
-  const sleepFeatures = sleepTimingFeatures(checkIn);
-  return <section className="page sub-page"><p className="eyebrow">{zh ? "模型与分析" : "MODEL & ANALYSIS"}</p><h1>{zh ? "执行规律" : "Execution patterns"}</h1><p className="page-copy">{zh ? "个人模型使用最近30个日历日内的合格观察数据。历史记录会保留，但不会影响当前系数。" : "The personal model uses eligible observations from the most recent 30 calendar days. Historical records remain available but do not influence the active coefficients."}</p><article className="model-card"><span>{zh ? "30天滚动模型" : "30-DAY ROLLING MODEL"}</span><strong>{zh ? "冷启动 · 正在收集观察数据" : "Cold start · collecting observations"}</strong><p>{zh ? "至少获得10条完整日记录后，才会估计个人系数。" : "Personal coefficients will be estimated after at least 10 complete daily records."}</p><div className="model-progress"><i style={{ width: "10%" }} /></div><small>{zh ? "1 / 10 条合格记录" : "1 / 10 eligible records"}</small></article><article className="feature-card"><span>{zh ? "睡眠回归特征" : "SLEEP REGRESSION FEATURES"}</span><strong>{checkIn.sleepStart}–{checkIn.sleepEnd} · {sleepFeatures.duration}h</strong><p>{zh ? "模型分别使用睡眠时长、入睡时间、起床时间、睡眠中点和作息规律性。时间通过正弦/余弦循环编码，避免午夜断点。" : "The model uses duration, bedtime, wake time, sleep midpoint, and schedule regularity. Clock times use sine/cosine circular encoding to avoid the midnight discontinuity."}</p></article><article className="chart-card"><div><strong>{zh ? "最近7天容量" : "Capacity · last 7 days"}</strong><span>{zh ? "均值" : "Mean"} {Math.round(bars.filter(Boolean).reduce((a,b) => a+b, 0) / 6)}</span></div><div className="bars">{bars.map((height, i) => <span key={i} style={{ height: `${height || 8}%` }} className={i === 5 ? "current" : ""} />)}</div><div className="days">{(zh ? ["四","五","六","日","一","今","明"] : ["Thu","Fri","Sat","Sun","Mon","Now","Next"]).map(d => <small key={d}>{d}</small>)}</div></article><article className="insight-card"><span>{zh ? "今日记录" : "TODAY’S RECORD"}</span><strong>{completed} / {total} {zh ? "项任务已完成" : "tasks completed"}</strong><p>{zh ? "执行结果已记录，用于后续分析。" : "Execution outcome recorded for future analysis."}</p></article></section>;
+function HistoryPage({ data, language, onImport }: { data:AppData; language:"en"|"zh"; onImport:(data:AppData)=>void }) {
+  const zh=language==="zh";
+  const entries=Object.entries(data.days).sort(([a],[b])=>a.localeCompare(b));
+  const recent=entries.slice(-7);
+  const cutoff=new Date(); cutoff.setDate(cutoff.getDate()-29); const cutoffKey=dateKey(cutoff);
+  const eligible=entries.filter(([date,record])=>date>=cutoffKey&&record.checkedIn&&Boolean(record.reflection));
+  const latest=entries.at(-1)?.[1]||defaultDay;
+  const sleepFeatures=sleepTimingFeatures(latest.checkIn);
+  const observed=recent.map(([date,record])=>({date,value:record.reflection?.perceivedCapacity??(record.checkedIn?calculateCapacity(record.checkIn):null)}));
+  const values=observed.map(item=>item.value).filter((value):value is number=>value!==null);
+  const mean=values.length?Math.round(values.reduce((a,b)=>a+b,0)/values.length):null;
+  const exportData=()=>{const blob=new Blob([JSON.stringify(data,null,2)],{type:"application/json"});const url=URL.createObjectURL(blob);const link=document.createElement("a");link.href=url;link.download=`brain-energy-${dateKey()}.json`;link.click();URL.revokeObjectURL(url);};
+  const importFile=(file?:File)=>{if(!file)return;const reader=new FileReader();reader.onload=()=>{try{const parsed=JSON.parse(String(reader.result));if(!parsed?.days||!parsed?.ideas)throw new Error();onImport(parsed as AppData);window.alert(zh?"数据已导入。":"Data imported.");}catch{window.alert(zh?"无法读取这个备份文件。":"This backup file is not valid.");}};reader.readAsText(file);};
+  return <section className="page sub-page"><p className="eyebrow">{zh?"模型与分析":"MODEL & ANALYSIS"}</p><h1>{zh?"执行规律":"Execution patterns"}</h1><p className="page-copy">{zh?"仅展示真实保存的每日记录。活动模型只使用最近30个日历日内的合格观察。":"Only genuine saved daily records are shown. The active model will use eligible observations from the most recent 30 calendar days."}</p><article className="model-card"><span>{zh?"30天滚动模型":"30-DAY ROLLING MODEL"}</span><strong>{eligible.length>=10?(zh?"具备拟合个人模型的最低样本量":"Minimum sample threshold reached"):(zh?"基准公式 · 正在收集观察数据":"Baseline heuristic · collecting observations")}</strong><p>{zh?"完整的晨间记录和晚间复盘构成一条合格记录。达到10条前不会估计个人系数。":"A completed morning check-in and evening reflection form one eligible observation. Personal coefficients are not estimated before 10 observations."}</p><div className="model-progress"><i style={{width:`${Math.min(100,eligible.length*10)}%`}}/></div><small>{eligible.length} / 10 {zh?"条合格记录":"eligible observations"}</small></article><article className="feature-card"><span>{zh?"最新睡眠特征":"LATEST SLEEP FEATURES"}</span><strong>{latest.checkIn.sleepStart}–{latest.checkIn.sleepEnd} · {sleepFeatures.duration}h</strong><p>{zh?"保存睡眠时长、入睡时间、起床时间和睡眠中点；时钟时间采用循环编码。":"Duration, bedtime, wake time, and midpoint are retained; clock times use circular encoding."}</p></article><article className="chart-card"><div><strong>{zh?"最近7条记录":"Latest 7 records"}</strong><span>{mean===null?(zh?"暂无数据":"No data"):`${zh?"均值":"Mean"} ${mean}`}</span></div>{observed.length?<><div className="bars">{observed.map((item,i)=><span key={item.date} style={{height:`${item.value??3}%`}} className={i===observed.length-1?"current":""}/>)}</div><div className="days">{observed.map(item=><small key={item.date}>{item.date.slice(5)}</small>)}</div></>:<p className="empty-history">{zh?"完成一次晨间记录后，这里才会出现数据。":"Data will appear after a morning check-in is recorded."}</p>}</article><article className="insight-card"><span>{zh?"数据备份":"DATA BACKUP"}</span><strong>{entries.length} {zh?"个日期已保存":"saved dates"}</strong><p>{zh?"数据目前保存在这台设备的浏览器中。定期导出备份，或在同一应用中导入。":"Data is currently stored in this device’s browser. Export a backup regularly or import it back into this app."}</p><div className="backup-actions"><button onClick={exportData}>{zh?"导出 JSON":"Export JSON"}</button><label>{zh?"导入 JSON":"Import JSON"}<input type="file" accept="application/json" onChange={e=>importFile(e.target.files?.[0])}/></label></div></article></section>;
 }
 
 function Sheet({ title, intro, language, onClose, children }: { title: string; intro: string; language: "en" | "zh"; onClose: () => void; children: React.ReactNode }) {
@@ -389,7 +422,8 @@ function CheckInSheet({ initial, language, onClose, onSave }: { initial: CheckIn
   };
   const hours = Math.floor(form.minutes / 60);
   const halfHour = form.minutes % 60 >= 30 ? 30 : 0;
-  return <Sheet language={language} title={zh ? "晨间状态记录" : "Daily check-in"} intro={zh ? "记录用于估计今日执行容量的晨间变量。" : "Record the morning variables used to estimate today’s execution capacity."} onClose={onClose}><form onSubmit={(e) => { e.preventDefault(); onSave({ ...form, sleep: sleepDuration(form.sleepStart, form.sleepEnd) }); }}><div className="time-section"><span className="field-label">{zh ? "睡眠时间" : "Sleep interval"}</span><div className="field-row"><label className="text-field"><span>{zh ? "入睡时间" : "Sleep time"}</span><input type="time" value={form.sleepStart} onChange={e => updateSleep("sleepStart", e.target.value)} /></label><label className="text-field"><span>{zh ? "起床时间" : "Wake time"}</span><input type="time" value={form.sleepEnd} onChange={e => updateSleep("sleepEnd", e.target.value)} /></label></div><small className="computed-value">{zh ? "计算时长" : "Calculated duration"}: {sleepDuration(form.sleepStart, form.sleepEnd)} {zh ? "小时" : "hours"}</small></div><Scale label={zh ? "身体能量" : "Physical energy"} value={form.energy} low={zh ? "低" : "Low"} high={zh ? "高" : "High"} onChange={energy => setForm({ ...form, energy })} /><Scale label={zh ? "心情" : "Mood"} value={form.mood} low={zh ? "低" : "Low"} high={zh ? "高" : "High"} onChange={mood => setForm({ ...form, mood })} /><Scale label={zh ? "压力" : "Stress"} value={form.stress} low={zh ? "低" : "Low"} high={zh ? "高" : "High"} onChange={stress => setForm({ ...form, stress })} /><Scale label={zh ? "专注度" : "Focus"} value={form.focus} low={zh ? "低" : "Low"} high={zh ? "高" : "High"} onChange={focus => setForm({ ...form, focus })} /><div className="time-section available-time"><span className="field-label">{zh ? "今天可用时间" : "Available time today"}</span><div className="duration-selects"><label><span>{zh ? "小时" : "Hours"}</span><select value={hours} onChange={e => setForm({ ...form, minutes: Number(e.target.value) * 60 + halfHour })}>{Array.from({ length: 17 }, (_, i) => <option value={i} key={i}>{i}</option>)}</select></label><label><span>{zh ? "分钟" : "Minutes"}</span><select value={halfHour} onChange={e => setForm({ ...form, minutes: hours * 60 + Number(e.target.value) })}><option value={0}>00</option><option value={30}>30</option></select></label></div></div><button className="submit-button">{zh ? "计算今日容量" : "Calculate capacity"} <span>→</span></button></form></Sheet>;
+  const duration=sleepDuration(form.sleepStart,form.sleepEnd); const invalidSleep=duration<2||duration>16;
+  return <Sheet language={language} title={zh ? "晨间状态记录" : "Daily check-in"} intro={zh ? "记录用于估计今日执行容量的晨间变量。" : "Record the morning variables used to estimate today’s execution capacity."} onClose={onClose}><form onSubmit={(e) => { e.preventDefault(); if(!invalidSleep)onSave({ ...form, sleep: duration }); }}><div className="time-section"><span className="field-label">{zh ? "睡眠时间" : "Sleep interval"}</span><div className="field-row"><label className="text-field"><span>{zh ? "入睡时间" : "Sleep time"}</span><input type="time" value={form.sleepStart} onChange={e => updateSleep("sleepStart", e.target.value)} /></label><label className="text-field"><span>{zh ? "起床时间" : "Wake time"}</span><input type="time" value={form.sleepEnd} onChange={e => updateSleep("sleepEnd", e.target.value)} /></label></div><small className={`computed-value ${invalidSleep?"invalid":""}`}>{invalidSleep?(zh?"请检查时间：睡眠时长应在2–16小时之间。":"Check the interval: sleep duration must be 2–16 hours."):`${zh?"计算时长":"Calculated duration"}: ${duration} ${zh?"小时":"hours"}`}</small></div><Scale label={zh ? "身体能量" : "Physical energy"} value={form.energy} low={zh ? "低" : "Low"} high={zh ? "高" : "High"} onChange={energy => setForm({ ...form, energy })} /><Scale label={zh ? "心情" : "Mood"} value={form.mood} low={zh ? "低" : "Low"} high={zh ? "高" : "High"} onChange={mood => setForm({ ...form, mood })} /><Scale label={zh ? "压力" : "Stress"} value={form.stress} low={zh ? "低" : "Low"} high={zh ? "高" : "High"} onChange={stress => setForm({ ...form, stress })} /><Scale label={zh ? "专注度" : "Focus"} value={form.focus} low={zh ? "低" : "Low"} high={zh ? "高" : "High"} onChange={focus => setForm({ ...form, focus })} /><div className="time-section available-time"><span className="field-label">{zh ? "今天可用时间" : "Available time today"}</span><div className="duration-selects"><label><span>{zh ? "小时" : "Hours"}</span><select value={hours} onChange={e => setForm({ ...form, minutes: Number(e.target.value) * 60 + halfHour })}>{Array.from({ length: 17 }, (_, i) => <option value={i} key={i}>{i}</option>)}</select></label><label><span>{zh ? "分钟" : "Minutes"}</span><select value={halfHour} onChange={e => setForm({ ...form, minutes: hours * 60 + Number(e.target.value) })}><option value={0}>00</option><option value={30}>30</option></select></label></div></div><button className="submit-button" disabled={invalidSleep}>{zh ? "计算今日容量" : "Calculate capacity"} <span>→</span></button></form></Sheet>;
 }
 
 function TaskSheet({ initial, language, onClose, onSave }: { initial: Task | null; language: "en" | "zh"; onClose: () => void; onSave: (task: Omit<Task, "id" | "status" | "createdAt">) => void }) {
@@ -405,9 +439,10 @@ function IdeaSheet({ initial, language, onClose, onSave }: { initial: Idea | nul
   return <Sheet language={language} title={initial?(zh?"编辑想法":"Edit idea"):(zh?"添加想法":"Add idea")} intro={zh?"想法保存在独立的想法库中，不会自动进入任务列表。":"Ideas remain separate from tasks unless explicitly promoted."} onClose={onClose}><form onSubmit={e=>{e.preventDefault();if(title.trim())onSave({title:title.trim(),description:description.trim(),category:category.trim()||"Other"});}}><label className="text-field"><span>{zh?"标题":"Title"}</span><input autoFocus required value={title} onChange={e=>setTitle(e.target.value)} /></label><label className="text-field"><span>{zh?"描述":"Description"}</span><textarea rows={4} value={description} onChange={e=>setDescription(e.target.value)} /></label><label className="text-field"><span>{zh?"分类":"Category"}</span><input value={category} onChange={e=>setCategory(e.target.value)} /></label><button className="submit-button">{initial?(zh?"保存修改":"Save changes"):(zh?"保存想法":"Save idea")}<span>✓</span></button></form></Sheet>;
 }
 
-function ReflectionSheet({ initial, capacity, completedEnergy, completedCount, totalCount, language, onClose, onSave }: { initial: Reflection | null; capacity: number; completedEnergy:number; completedCount:number; totalCount:number; language: "en" | "zh"; onClose: () => void; onSave: (r: Reflection) => void }) {
+function ReflectionSheet({ initial, capacity, completedEnergy, completedCount, totalCount, latestCompletedAt, language, onClose, onSave }: { initial: Reflection | null; capacity: number; completedEnergy:number; completedCount:number; totalCount:number; latestCompletedAt:string; language: "en" | "zh"; onClose: () => void; onSave: (r: Reflection) => void }) {
   const systemEstimate = Math.min(100, Math.max(capacity, completedEnergy));
   const [rating, setRating] = useState(initial?.rating || 3); const [perceived, setPerceived] = useState(initial?.perceivedCapacity || systemEstimate); const [note, setNote] = useState(initial?.note || ""); const [exercised, setExercised] = useState(initial?.exercised || false);
   const zh = language === "zh";
-  return <Sheet language={language} title={zh ? "晚间复盘" : "Daily reflection"} intro={zh ? "系统先根据晨间预测和完成记录生成估计；你可以在不准确时调整。" : "The system starts with an estimate from the morning prediction and completed work; adjust it if inaccurate."} onClose={onClose}><form onSubmit={e => { e.preventDefault(); onSave({ rating, perceivedCapacity: perceived, note, exercised, savedAt: new Date().toISOString() }); }}><div className="observed-capacity"><div><span>{zh?"自动记录":"AUTO-OBSERVED"}</span><strong>{completedEnergy} {zh?"能量已完成":"energy completed"}</strong><small>{completedCount} / {totalCount} {zh?"项计划任务":"planned tasks"}</small></div><div><span>{zh?"系统估计":"SYSTEM ESTIMATE"}</span><strong>{systemEstimate}/100</strong><small>{zh?"不会低于已完成能量":"Never below observed completed energy"}</small></div></div><Scale label={zh ? "今日整体评分" : "Overall day rating"} value={rating} low={zh ? "低" : "Low"} high={zh ? "高" : "High"} onChange={setRating} /><label className="toggle-field"><span><strong>{zh ? "今天是否运动" : "Exercise completed today"}</strong><small>{zh ? "记录任何有意进行的身体活动" : "Any intentional physical activity"}</small></span><input type="checkbox" checked={exercised} onChange={e => setExercised(e.target.checked)} /></label><label className="range-field"><span><strong>{zh ? "调整今日实际可用精力" : "Adjust today’s actual usable capacity"}</strong><b>{perceived}/100</b></span><small className="capacity-help">{zh ? "完成能量只能提供下限；如果任务安排较少，系统无法观察未使用的潜在精力。" : "Completed energy provides a lower bound only; unused capacity cannot be observed when little work was planned."}</small><input type="range" min="0" max="100" value={perceived} onChange={e => setPerceived(Number(e.target.value))} /></label><label className="text-field"><span>{zh ? "相关因素或例外情况" : "Relevant factors or exceptions"}</span><textarea rows={4} value={note} onChange={e => setNote(e.target.value)} placeholder={zh ? "可选，用于后续分析" : "Optional notes for later analysis"} /></label><button className="submit-button">{zh ? "保存复盘" : "Save reflection"} <span>✓</span></button></form></Sheet>;
+  const activityAfterReflection=Boolean(initial&&latestCompletedAt&&latestCompletedAt>initial.savedAt);
+  return <Sheet language={language} title={zh ? "晚间复盘" : "Daily reflection"} intro={zh ? "系统先根据晨间预测和完成记录生成估计；你可以在不准确时调整。" : "The system starts with an estimate from the morning prediction and completed work; adjust it if inaccurate."} onClose={onClose}><form onSubmit={e => { e.preventDefault(); onSave({ rating, perceivedCapacity: perceived, note, exercised, savedAt: new Date().toISOString() }); }}><div className="observed-capacity"><div><span>{zh?"自动记录":"AUTO-OBSERVED"}</span><strong>{completedEnergy} {zh?"预计任务能量已完成":"estimated task energy completed"}</strong><small>{completedCount} / {totalCount} {zh?"项计划任务":"planned tasks"}</small></div><div><span>{zh?"系统估计":"SYSTEM ESTIMATE"}</span><strong>{systemEstimate}/100</strong><small>{zh?"不会低于已完成任务的预计能量":"Never below completed tasks’ estimated energy"}</small></div></div>{activityAfterReflection&&<p className="reflection-warning">{zh?"上次复盘后有新的任务完成，请重新检查下面的校正值。":"New task activity was recorded after the last reflection. Review the adjustment below."}</p>}<Scale label={zh ? "今日整体评分" : "Overall day rating"} value={rating} low={zh ? "低" : "Low"} high={zh ? "高" : "High"} onChange={setRating} /><label className="toggle-field"><span><strong>{zh ? "今天是否运动" : "Exercise completed today"}</strong><small>{zh ? "记录任何有意进行的身体活动" : "Any intentional physical activity"}</small></span><input type="checkbox" checked={exercised} onChange={e => setExercised(e.target.checked)} /></label><label className="range-field"><span><strong>{zh ? "调整今日实际可用精力" : "Adjust today’s actual usable capacity"}</strong><b>{perceived}/100</b></span><small className="capacity-help">{zh ? "完成任务的预计能量只能提供下限；如果任务安排较少，系统无法观察未使用的潜在精力。" : "Estimated energy of completed tasks provides a lower bound only; unused capacity cannot be observed when little work was planned."}</small><input type="range" min="0" max="100" value={perceived} onChange={e => setPerceived(Number(e.target.value))} /></label><label className="text-field"><span>{zh ? "相关因素或例外情况" : "Relevant factors or exceptions"}</span><textarea rows={4} value={note} onChange={e => setNote(e.target.value)} placeholder={zh ? "可选，用于后续分析" : "Optional notes for later analysis"} /></label><button className="submit-button">{zh ? "保存复盘" : "Save reflection"} <span>✓</span></button></form></Sheet>;
 }
