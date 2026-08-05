@@ -61,9 +61,53 @@ const categoryColors: Record<string, string> = {
   兴趣: "rose",
 };
 
+function clockHours(time: string) {
+  const [hour, minute] = time.split(":").map(Number);
+  return hour + minute / 60;
+}
+
+function circularHours(hours: number) {
+  const angle = (hours / 24) * Math.PI * 2;
+  return { sin: Math.sin(angle), cos: Math.cos(angle) };
+}
+
+function circularTime(time: string) {
+  return circularHours(clockHours(time));
+}
+
+function sleepTimingFeatures(c: CheckIn) {
+  const bedtime = clockHours(c.sleepStart);
+  const wakeTime = clockHours(c.sleepEnd);
+  const bedtimeContinuous = bedtime < 12 ? bedtime + 24 : bedtime;
+  const midpointContinuous = bedtimeContinuous + c.sleep / 2;
+  const midpointClock = midpointContinuous % 24;
+  const bedtimeCircular = circularTime(c.sleepStart);
+  const wakeCircular = circularTime(c.sleepEnd);
+  const midpointCircular = circularHours(midpointClock);
+  return {
+    duration: c.sleep,
+    bedtimeSin: bedtimeCircular.sin,
+    bedtimeCos: bedtimeCircular.cos,
+    wakeTimeSin: wakeCircular.sin,
+    wakeTimeCos: wakeCircular.cos,
+    midpointSin: midpointCircular.sin,
+    midpointCos: midpointCircular.cos,
+  };
+}
+
+function sleepTimingContribution(c: CheckIn) {
+  const bedtime = clockHours(c.sleepStart);
+  const bedtimeContinuous = bedtime < 12 ? bedtime + 24 : bedtime;
+  const wakeTime = clockHours(c.sleepEnd);
+  const bedtimeScore = Math.max(-9, Math.min(6, 6 - Math.abs(bedtimeContinuous - 22.5) * 3));
+  const wakeDistanceOutsideBand = Math.max(0, Math.abs(wakeTime - 7.5) - 1.5);
+  const wakeScore = Math.max(-5, 2 - wakeDistanceOutsideBand * 1.5);
+  return Math.round((bedtimeScore + wakeScore) * 10) / 10;
+}
+
 function calculateCapacity(c: CheckIn) {
   const sleepScore = Math.max(-12, Math.min(8, (c.sleep - 7) * 5));
-  const raw = 40 + sleepScore + c.energy * 7 + c.mood * 3 - c.stress * 4 + c.focus * 4;
+  const raw = 40 + sleepScore + sleepTimingContribution(c) + c.energy * 7 + c.mood * 3 - c.stress * 4 + c.focus * 4;
   return Math.max(20, Math.min(100, Math.round(raw)));
 }
 
@@ -192,9 +236,9 @@ export default function Home() {
                 <div><span>{zh ? "状态" : "STATE"}</span><b>{capacity >= 75 ? (zh ? "高" : "High") : capacity >= 55 ? (zh ? "中等" : "Moderate") : (zh ? "低" : "Low")}</b></div>
               </div>
             </div>
-            <p className="capacity-note">{data.checkedIn ? (zh ? "根据今天的睡眠、身体能量、心情、压力和专注度计算。" : "Calculated from today's sleep, physical energy, mood, stress, and focus inputs.") : (zh ? "完成晨间状态记录以生成今日容量估计。" : "Complete the daily check-in to generate a state-based capacity estimate.")}</p>
+            <p className="capacity-note">{data.checkedIn ? (zh ? "根据睡眠时长、入睡和起床时间，以及今天的身体能量、心情、压力和专注度计算。" : "Calculated from sleep duration, bedtime, wake time, physical energy, mood, stress, and focus.") : (zh ? "完成晨间状态记录以生成今日容量估计。" : "Complete the daily check-in to generate a state-based capacity estimate.")}</p>
             <div className="signals">
-              <span>{zh ? "睡眠" : "Sleep"} {data.checkIn.sleepStart}–{data.checkIn.sleepEnd} ({data.checkIn.sleep}h)</span><span>{zh ? "压力" : "Stress"} {data.checkIn.stress}/5</span><span>{zh ? "专注" : "Focus"} {data.checkIn.focus}/5</span>
+              <span>{zh ? "睡眠" : "Sleep"} {data.checkIn.sleepStart}–{data.checkIn.sleepEnd} ({data.checkIn.sleep}h)</span><span>{zh ? "睡眠时段贡献" : "Timing effect"} {sleepTimingContribution(data.checkIn) >= 0 ? "+" : ""}{sleepTimingContribution(data.checkIn)}</span><span>{zh ? "压力" : "Stress"} {data.checkIn.stress}/5</span><span>{zh ? "专注" : "Focus"} {data.checkIn.focus}/5</span>
             </div>
           </article>
 
@@ -234,7 +278,7 @@ export default function Home() {
 
       {tab === "tasks" && <SimplePage eyebrow={zh ? "任务库" : "TASK LIBRARY"} title={zh ? "任务" : "Tasks"} copy={zh ? "保存带有时间和能量估计的可执行工作。大型任务应拆分成一天内可以安排的单位。" : "Store actionable work with time and energy estimates. Divide large tasks into units that can be scheduled within one day."} action={zh ? "添加任务" : "Add task"} onAction={() => setTaskOpen(true)} items={data.tasks.map(t => `${zh ? (sampleTitleZh[t.id] || t.title) : t.title} · ${t.energy} ${zh ? "能量" : "energy"}`)} />}
       {tab === "ideas" && <SimplePage eyebrow={zh ? "想法库" : "IDEA VAULT"} title={zh ? "想法" : "Ideas"} copy={zh ? "保存可能在未来推进的想法，不设置期限或执行压力。除非明确升级，否则想法不会进入任务列表。" : "Store possible future ideas without deadlines or execution pressure. Ideas do not enter the task list unless explicitly promoted."} action={zh ? "添加想法" : "Add idea"} items={zh ? ["交换旅行规划工具", "学习陶艺", "研究主题：个人容量与执行"] : ["Exchange travel planning tool", "Learn ceramics", "Research topic: personal capacity and execution"]} />}
-      {tab === "history" && <HistoryPage capacity={capacity} completed={completed} total={data.tasks.length} language={language} />}
+      {tab === "history" && <HistoryPage capacity={capacity} completed={completed} total={data.tasks.length} checkIn={data.checkIn} language={language} />}
 
       <nav className="bottom-nav" aria-label="Primary navigation">
         <NavButton active={tab === "today"} icon="01" label={zh ? "今天" : "Today"} onClick={() => setTab("today")} />
@@ -258,10 +302,11 @@ function SimplePage({ eyebrow, title, copy, action, items, onAction }: { eyebrow
   return <section className="page sub-page"><p className="eyebrow">{eyebrow}</p><h1>{title}</h1><p className="page-copy">{copy}</p><button className="primary-button" onClick={onAction}>{action}<span>＋</span></button><div className="simple-list">{items.map((item) => <article key={item}><span>◇</span><strong>{item}</strong><button>→</button></article>)}</div></section>;
 }
 
-function HistoryPage({ capacity, completed, total, language }: { capacity: number; completed: number; total: number; language: "en" | "zh" }) {
+function HistoryPage({ capacity, completed, total, checkIn, language }: { capacity: number; completed: number; total: number; checkIn: CheckIn; language: "en" | "zh" }) {
   const bars = [52, 68, 61, 79, 73, capacity, 0];
   const zh = language === "zh";
-  return <section className="page sub-page"><p className="eyebrow">{zh ? "模型与分析" : "MODEL & ANALYSIS"}</p><h1>{zh ? "执行规律" : "Execution patterns"}</h1><p className="page-copy">{zh ? "个人模型使用最近30个日历日内的合格观察数据。历史记录会保留，但不会影响当前系数。" : "The personal model uses eligible observations from the most recent 30 calendar days. Historical records remain available but do not influence the active coefficients."}</p><article className="model-card"><span>{zh ? "30天滚动模型" : "30-DAY ROLLING MODEL"}</span><strong>{zh ? "冷启动 · 正在收集观察数据" : "Cold start · collecting observations"}</strong><p>{zh ? "至少获得10条完整日记录后，才会估计个人系数。" : "Personal coefficients will be estimated after at least 10 complete daily records."}</p><div className="model-progress"><i style={{ width: "10%" }} /></div><small>{zh ? "1 / 10 条合格记录" : "1 / 10 eligible records"}</small></article><article className="chart-card"><div><strong>{zh ? "最近7天容量" : "Capacity · last 7 days"}</strong><span>{zh ? "均值" : "Mean"} {Math.round(bars.filter(Boolean).reduce((a,b) => a+b, 0) / 6)}</span></div><div className="bars">{bars.map((height, i) => <span key={i} style={{ height: `${height || 8}%` }} className={i === 5 ? "current" : ""} />)}</div><div className="days">{(zh ? ["四","五","六","日","一","今","明"] : ["Thu","Fri","Sat","Sun","Mon","Now","Next"]).map(d => <small key={d}>{d}</small>)}</div></article><article className="insight-card"><span>{zh ? "今日记录" : "TODAY’S RECORD"}</span><strong>{completed} / {total} {zh ? "项任务已完成" : "tasks completed"}</strong><p>{zh ? "执行结果已记录，用于后续分析。" : "Execution outcome recorded for future analysis."}</p></article></section>;
+  const sleepFeatures = sleepTimingFeatures(checkIn);
+  return <section className="page sub-page"><p className="eyebrow">{zh ? "模型与分析" : "MODEL & ANALYSIS"}</p><h1>{zh ? "执行规律" : "Execution patterns"}</h1><p className="page-copy">{zh ? "个人模型使用最近30个日历日内的合格观察数据。历史记录会保留，但不会影响当前系数。" : "The personal model uses eligible observations from the most recent 30 calendar days. Historical records remain available but do not influence the active coefficients."}</p><article className="model-card"><span>{zh ? "30天滚动模型" : "30-DAY ROLLING MODEL"}</span><strong>{zh ? "冷启动 · 正在收集观察数据" : "Cold start · collecting observations"}</strong><p>{zh ? "至少获得10条完整日记录后，才会估计个人系数。" : "Personal coefficients will be estimated after at least 10 complete daily records."}</p><div className="model-progress"><i style={{ width: "10%" }} /></div><small>{zh ? "1 / 10 条合格记录" : "1 / 10 eligible records"}</small></article><article className="feature-card"><span>{zh ? "睡眠回归特征" : "SLEEP REGRESSION FEATURES"}</span><strong>{checkIn.sleepStart}–{checkIn.sleepEnd} · {sleepFeatures.duration}h</strong><p>{zh ? "模型分别使用睡眠时长、入睡时间、起床时间、睡眠中点和作息规律性。时间通过正弦/余弦循环编码，避免午夜断点。" : "The model uses duration, bedtime, wake time, sleep midpoint, and schedule regularity. Clock times use sine/cosine circular encoding to avoid the midnight discontinuity."}</p></article><article className="chart-card"><div><strong>{zh ? "最近7天容量" : "Capacity · last 7 days"}</strong><span>{zh ? "均值" : "Mean"} {Math.round(bars.filter(Boolean).reduce((a,b) => a+b, 0) / 6)}</span></div><div className="bars">{bars.map((height, i) => <span key={i} style={{ height: `${height || 8}%` }} className={i === 5 ? "current" : ""} />)}</div><div className="days">{(zh ? ["四","五","六","日","一","今","明"] : ["Thu","Fri","Sat","Sun","Mon","Now","Next"]).map(d => <small key={d}>{d}</small>)}</div></article><article className="insight-card"><span>{zh ? "今日记录" : "TODAY’S RECORD"}</span><strong>{completed} / {total} {zh ? "项任务已完成" : "tasks completed"}</strong><p>{zh ? "执行结果已记录，用于后续分析。" : "Execution outcome recorded for future analysis."}</p></article></section>;
 }
 
 function Sheet({ title, intro, language, onClose, children }: { title: string; intro: string; language: "en" | "zh"; onClose: () => void; children: React.ReactNode }) {
