@@ -22,7 +22,17 @@ type Task = {
   category: string;
   minutes: number;
   energy: number;
+  urgency: 1 | 2 | 3;
+  createdAt: string;
   status: Status;
+};
+
+type Idea = {
+  id: string;
+  title: string;
+  description: string;
+  category: string;
+  createdAt: string;
 };
 
 type Reflection = {
@@ -37,6 +47,7 @@ type AppData = {
   checkIn: CheckIn;
   checkedIn: boolean;
   tasks: Task[];
+  ideas: Idea[];
   reflection: Reflection | null;
 };
 
@@ -44,9 +55,13 @@ const defaultData: AppData = {
   checkIn: { sleepStart: "23:30", sleepEnd: "07:00", sleep: 7.5, energy: 3, mood: 4, stress: 2, focus: 3, minutes: 300 },
   checkedIn: false,
   tasks: [
-    { id: "sample-1", title: "Complete research methods assignment", category: "Academic", minutes: 90, energy: 28, status: "planned" },
-    { id: "sample-2", title: "French listening practice", category: "Language", minutes: 30, energy: 12, status: "planned" },
-    { id: "sample-3", title: "Post-dinner walk", category: "Health", minutes: 35, energy: 8, status: "planned" },
+    { id: "sample-1", title: "Complete research methods assignment", category: "Academic", minutes: 90, energy: 28, urgency: 3, createdAt: "2026-08-05T08:00:00.000Z", status: "planned" },
+    { id: "sample-2", title: "French listening practice", category: "Language", minutes: 30, energy: 12, urgency: 2, createdAt: "2026-08-05T08:01:00.000Z", status: "planned" },
+    { id: "sample-3", title: "Post-dinner walk", category: "Health", minutes: 35, energy: 8, urgency: 1, createdAt: "2026-08-05T08:02:00.000Z", status: "planned" },
+  ],
+  ideas: [
+    { id: "idea-1", title: "Exchange travel planning tool", description: "Explore constraints and possible user workflows.", category: "Product", createdAt: "2026-08-05T09:00:00.000Z" },
+    { id: "idea-2", title: "Learn ceramics", description: "Find an introductory course for a future term.", category: "Learning", createdAt: "2026-08-05T09:01:00.000Z" },
   ],
   reflection: null,
 };
@@ -138,6 +153,9 @@ export default function Home() {
   const [hydrated, setHydrated] = useState(false);
   const [checkInOpen, setCheckInOpen] = useState(false);
   const [taskOpen, setTaskOpen] = useState(false);
+  const [editingTask, setEditingTask] = useState<Task | null>(null);
+  const [ideaOpen, setIdeaOpen] = useState(false);
+  const [editingIdea, setEditingIdea] = useState<Idea | null>(null);
   const [reflectionOpen, setReflectionOpen] = useState(false);
 
   useEffect(() => {
@@ -158,7 +176,8 @@ export default function Home() {
           "sample-2": { title: "French listening practice", category: "Language" },
           "sample-3": { title: "Post-dinner walk", category: "Health" },
         };
-        parsed.tasks = parsed.tasks.map((task) => englishSamples[task.id] ? { ...task, ...englishSamples[task.id] } : task);
+        parsed.tasks = parsed.tasks.map((task, index) => ({ ...task, ...(englishSamples[task.id] || {}), urgency: task.urgency || 2, createdAt: task.createdAt || new Date(Date.now() + index * 1000).toISOString() }));
+        if (!Array.isArray(parsed.ideas)) parsed.ideas = defaultData.ideas;
         setData(parsed);
       } catch { /* keep safe defaults */ }
     }
@@ -191,12 +210,29 @@ export default function Home() {
     setCheckInOpen(false);
   }
 
-  function addTask(task: Omit<Task, "id" | "status">) {
-    setData((current) => ({
-      ...current,
-      tasks: [...current.tasks, { ...task, id: crypto.randomUUID(), status: "planned" }],
+  function saveTask(task: Omit<Task, "id" | "status" | "createdAt">) {
+    setData((current) => ({ ...current, tasks: editingTask
+      ? current.tasks.map((item) => item.id === editingTask.id ? { ...item, ...task } : item)
+      : [...current.tasks, { ...task, id: crypto.randomUUID(), createdAt: new Date().toISOString(), status: "planned" }],
     }));
     setTaskOpen(false);
+    setEditingTask(null);
+  }
+
+  function openTaskEditor(task?: Task) { setEditingTask(task || null); setTaskOpen(true); }
+  function deleteTask(id: string) {
+    if (window.confirm(zh ? "删除这个任务？此操作无法撤销。" : "Delete this task? This cannot be undone.")) setData(current => ({ ...current, tasks: current.tasks.filter(task => task.id !== id) }));
+  }
+  function saveIdea(idea: Omit<Idea, "id" | "createdAt">) {
+    setData(current => ({ ...current, ideas: editingIdea
+      ? current.ideas.map(item => item.id === editingIdea.id ? { ...item, ...idea } : item)
+      : [...current.ideas, { ...idea, id: crypto.randomUUID(), createdAt: new Date().toISOString() }],
+    }));
+    setIdeaOpen(false); setEditingIdea(null);
+  }
+  function openIdeaEditor(idea?: Idea) { setEditingIdea(idea || null); setIdeaOpen(true); }
+  function deleteIdea(id: string) {
+    if (window.confirm(zh ? "删除这个想法？此操作无法撤销。" : "Delete this idea? This cannot be undone.")) setData(current => ({ ...current, ideas: current.ideas.filter(idea => idea.id !== id) }));
   }
 
   function setTaskStatus(id: string, status: Status) {
@@ -244,7 +280,7 @@ export default function Home() {
 
           <div className="section-title">
             <div><p className="eyebrow">{zh ? "今日计划" : "TODAY’S PLAN"}</p><h2>{zh ? "给今天的计划留一点余量" : "Leave some margin in today’s plan"}</h2></div>
-            <button className="round-add" aria-label={zh ? "添加任务" : "Add task"} onClick={() => setTaskOpen(true)}>＋</button>
+            <button className="round-add" aria-label={zh ? "添加任务" : "Add task"} onClick={() => openTaskEditor()}>＋</button>
           </div>
 
           <article className={`load-card ${loadRatio > 100 ? "warning" : ""}`}>
@@ -263,9 +299,9 @@ export default function Home() {
                 <div className="task-main">
                   <span className={`category ${categoryColors[task.category] || "sand"}`}>{zh ? (categoryZh[task.category] || task.category) : task.category}</span>
                   <h3>{zh ? (sampleTitleZh[task.id] || task.title) : task.title}</h3>
-                  <p>{task.minutes} {zh ? "分钟" : "min"} <i /> {task.energy} {zh ? "能量" : "energy"}</p>
+                  <p>{task.minutes} {zh ? "分钟" : "min"} <i /> {task.energy} {zh ? "能量" : "energy"} <i /> {zh ? "紧急度" : "urgency"} {task.urgency}/3</p>
                 </div>
-                <button className="task-menu" aria-label={zh ? "任务操作" : "Task action"} onClick={() => setTaskStatus(task.id, task.status === "started" ? "skipped" : "started")}>{task.status === "started" ? (zh ? "跳过" : "Skip") : task.status === "skipped" ? (zh ? "已跳过" : "Skipped") : (zh ? "开始" : "Start")}</button>
+                <div className="task-actions"><button onClick={() => openTaskEditor(task)}>{zh ? "编辑" : "Edit"}</button><button onClick={() => setTaskStatus(task.id, task.status === "started" ? "skipped" : "started")}>{task.status === "started" ? (zh ? "跳过" : "Skip") : task.status === "skipped" ? (zh ? "已跳过" : "Skipped") : (zh ? "开始" : "Start")}</button><button className="danger" aria-label={zh ? "删除任务" : "Delete task"} onClick={() => deleteTask(task.id)}>×</button></div>
               </article>
             ))}
           </div>
@@ -276,8 +312,8 @@ export default function Home() {
         </section>
       )}
 
-      {tab === "tasks" && <SimplePage eyebrow={zh ? "任务库" : "TASK LIBRARY"} title={zh ? "任务" : "Tasks"} copy={zh ? "保存带有时间和能量估计的可执行工作。大型任务应拆分成一天内可以安排的单位。" : "Store actionable work with time and energy estimates. Divide large tasks into units that can be scheduled within one day."} action={zh ? "添加任务" : "Add task"} onAction={() => setTaskOpen(true)} items={data.tasks.map(t => `${zh ? (sampleTitleZh[t.id] || t.title) : t.title} · ${t.energy} ${zh ? "能量" : "energy"}`)} />}
-      {tab === "ideas" && <SimplePage eyebrow={zh ? "想法库" : "IDEA VAULT"} title={zh ? "想法" : "Ideas"} copy={zh ? "保存可能在未来推进的想法，不设置期限或执行压力。除非明确升级，否则想法不会进入任务列表。" : "Store possible future ideas without deadlines or execution pressure. Ideas do not enter the task list unless explicitly promoted."} action={zh ? "添加想法" : "Add idea"} items={zh ? ["交换旅行规划工具", "学习陶艺", "研究主题：个人容量与执行"] : ["Exchange travel planning tool", "Learn ceramics", "Research topic: personal capacity and execution"]} />}
+      {tab === "tasks" && <TasksPage tasks={data.tasks} language={language} onAdd={() => openTaskEditor()} onEdit={openTaskEditor} onDelete={deleteTask} />}
+      {tab === "ideas" && <IdeasPage ideas={data.ideas} language={language} onAdd={() => openIdeaEditor()} onEdit={openIdeaEditor} onDelete={deleteIdea} />}
       {tab === "history" && <HistoryPage capacity={capacity} completed={completed} total={data.tasks.length} checkIn={data.checkIn} language={language} />}
 
       <nav className="bottom-nav" aria-label="Primary navigation">
@@ -288,7 +324,8 @@ export default function Home() {
       </nav>
 
       {checkInOpen && <CheckInSheet initial={data.checkIn} language={language} onClose={() => setCheckInOpen(false)} onSave={updateCheckIn} />}
-      {taskOpen && <TaskSheet language={language} onClose={() => setTaskOpen(false)} onSave={addTask} />}
+      {taskOpen && <TaskSheet initial={editingTask} language={language} onClose={() => { setTaskOpen(false); setEditingTask(null); }} onSave={saveTask} />}
+      {ideaOpen && <IdeaSheet initial={editingIdea} language={language} onClose={() => { setIdeaOpen(false); setEditingIdea(null); }} onSave={saveIdea} />}
       {reflectionOpen && <ReflectionSheet initial={data.reflection} capacity={capacity} language={language} onClose={() => setReflectionOpen(false)} onSave={(reflection) => { setData(current => ({ ...current, reflection })); setReflectionOpen(false); }} />}
     </main>
   );
@@ -298,8 +335,17 @@ function NavButton({ active, icon, label, onClick }: { active: boolean; icon: st
   return <button className={active ? "active" : ""} onClick={onClick}><span>{icon}</span><small>{label}</small></button>;
 }
 
-function SimplePage({ eyebrow, title, copy, action, items, onAction }: { eyebrow: string; title: string; copy: string; action: string; items: string[]; onAction?: () => void }) {
-  return <section className="page sub-page"><p className="eyebrow">{eyebrow}</p><h1>{title}</h1><p className="page-copy">{copy}</p><button className="primary-button" onClick={onAction}>{action}<span>＋</span></button><div className="simple-list">{items.map((item) => <article key={item}><span>◇</span><strong>{item}</strong><button>→</button></article>)}</div></section>;
+function TasksPage({ tasks, language, onAdd, onEdit, onDelete }: { tasks: Task[]; language: "en" | "zh"; onAdd: () => void; onEdit: (task: Task) => void; onDelete: (id: string) => void }) {
+  const [filter, setFilter] = useState("All"); const [sort, setSort] = useState("urgency"); const zh = language === "zh";
+  const categoryZh: Record<string,string> = { Academic:"学业", Career:"事业", Health:"健康", Language:"语言", Life:"生活", Hobby:"兴趣" };
+  const visible = tasks.filter(t => filter === "All" || t.category === filter).sort((a,b) => sort === "energy" ? b.energy-a.energy : sort === "category" ? a.category.localeCompare(b.category) : sort === "created" ? b.createdAt.localeCompare(a.createdAt) : b.urgency-a.urgency);
+  return <section className="page sub-page"><p className="eyebrow">{zh ? "任务库" : "TASK LIBRARY"}</p><h1>{zh ? "任务" : "Tasks"}</h1><p className="page-copy">{zh ? "管理任务的时间、能量、分类和紧急程度。" : "Manage task time, energy, category, and urgency."}</p><button className="primary-button" onClick={onAdd}>{zh ? "添加任务" : "Add task"}<span>＋</span></button><div className="list-controls"><label><span>{zh ? "筛选" : "Filter"}</span><select value={filter} onChange={e=>setFilter(e.target.value)}><option value="All">{zh ? "全部分类" : "All categories"}</option>{["Academic","Career","Health","Language","Life","Hobby"].map(c=><option key={c} value={c}>{zh ? categoryZh[c] : c}</option>)}</select></label><label><span>{zh ? "排序" : "Sort"}</span><select value={sort} onChange={e=>setSort(e.target.value)}><option value="urgency">{zh ? "紧急程度" : "Urgency"}</option><option value="energy">{zh ? "能量" : "Energy"}</option><option value="category">{zh ? "分类" : "Category"}</option><option value="created">{zh ? "添加时间" : "Date added"}</option></select></label></div><div className="management-list">{visible.map(task=><article key={task.id} className={`category-border ${categoryColors[task.category] || "sand"}`}><div className="management-head"><span className={`category ${categoryColors[task.category] || "sand"}`}>{zh ? categoryZh[task.category] : task.category}</span><span className={`urgency urgency-${task.urgency}`}>{zh ? "紧急" : "Urgency"} {task.urgency}/3</span></div><h3>{task.title}</h3><p>{task.minutes} {zh ? "分钟" : "min"} · {task.energy} {zh ? "能量" : "energy"}</p><div className="row-actions"><button onClick={()=>onEdit(task)}>{zh ? "编辑" : "Edit"}</button><button className="danger" onClick={()=>onDelete(task.id)}>{zh ? "删除" : "Delete"}</button></div></article>)}</div></section>;
+}
+
+function IdeasPage({ ideas, language, onAdd, onEdit, onDelete }: { ideas: Idea[]; language: "en" | "zh"; onAdd: () => void; onEdit: (idea: Idea) => void; onDelete: (id: string) => void }) {
+  const [filter,setFilter]=useState("All"); const [sort,setSort]=useState("created"); const zh=language==="zh"; const categories=[...new Set(ideas.map(i=>i.category))];
+  const visible=ideas.filter(i=>filter==="All"||i.category===filter).sort((a,b)=>sort==="category"?a.category.localeCompare(b.category):b.createdAt.localeCompare(a.createdAt));
+  return <section className="page sub-page"><p className="eyebrow">{zh?"想法库":"IDEA VAULT"}</p><h1>{zh?"想法":"Ideas"}</h1><p className="page-copy">{zh?"保存未来可能推进的想法。想法没有紧急程度，也不会自动成为任务。":"Store possible future ideas. Ideas have no urgency and do not automatically become tasks."}</p><button className="primary-button" onClick={onAdd}>{zh?"添加想法":"Add idea"}<span>＋</span></button><div className="list-controls"><label><span>{zh?"筛选":"Filter"}</span><select value={filter} onChange={e=>setFilter(e.target.value)}><option value="All">{zh?"全部分类":"All categories"}</option>{categories.map(c=><option key={c}>{c}</option>)}</select></label><label><span>{zh?"排序":"Sort"}</span><select value={sort} onChange={e=>setSort(e.target.value)}><option value="created">{zh?"添加时间":"Date added"}</option><option value="category">{zh?"分类":"Category"}</option></select></label></div><div className="management-list">{visible.map(idea=><article key={idea.id}><div className="management-head"><span className="category sky">{idea.category}</span></div><h3>{idea.title}</h3>{idea.description&&<p>{idea.description}</p>}<div className="row-actions"><button onClick={()=>onEdit(idea)}>{zh?"编辑":"Edit"}</button><button className="danger" onClick={()=>onDelete(idea.id)}>{zh?"删除":"Delete"}</button></div></article>)}</div></section>;
 }
 
 function HistoryPage({ capacity, completed, total, checkIn, language }: { capacity: number; completed: number; total: number; checkIn: CheckIn; language: "en" | "zh" }) {
@@ -330,16 +376,21 @@ function CheckInSheet({ initial, language, onClose, onSave }: { initial: CheckIn
   return <Sheet language={language} title={zh ? "晨间状态记录" : "Daily check-in"} intro={zh ? "记录用于估计今日执行容量的晨间变量。" : "Record the morning variables used to estimate today’s execution capacity."} onClose={onClose}><form onSubmit={(e) => { e.preventDefault(); onSave({ ...form, sleep: sleepDuration(form.sleepStart, form.sleepEnd) }); }}><div className="time-section"><span className="field-label">{zh ? "睡眠时间" : "Sleep interval"}</span><div className="field-row"><label className="text-field"><span>{zh ? "入睡时间" : "Sleep time"}</span><input type="time" value={form.sleepStart} onChange={e => updateSleep("sleepStart", e.target.value)} /></label><label className="text-field"><span>{zh ? "起床时间" : "Wake time"}</span><input type="time" value={form.sleepEnd} onChange={e => updateSleep("sleepEnd", e.target.value)} /></label></div><small className="computed-value">{zh ? "计算时长" : "Calculated duration"}: {sleepDuration(form.sleepStart, form.sleepEnd)} {zh ? "小时" : "hours"}</small></div><Scale label={zh ? "身体能量" : "Physical energy"} value={form.energy} low={zh ? "低" : "Low"} high={zh ? "高" : "High"} onChange={energy => setForm({ ...form, energy })} /><Scale label={zh ? "心情" : "Mood"} value={form.mood} low={zh ? "低" : "Low"} high={zh ? "高" : "High"} onChange={mood => setForm({ ...form, mood })} /><Scale label={zh ? "压力" : "Stress"} value={form.stress} low={zh ? "低" : "Low"} high={zh ? "高" : "High"} onChange={stress => setForm({ ...form, stress })} /><Scale label={zh ? "专注度" : "Focus"} value={form.focus} low={zh ? "低" : "Low"} high={zh ? "高" : "High"} onChange={focus => setForm({ ...form, focus })} /><div className="time-section available-time"><span className="field-label">{zh ? "今天可用时间" : "Available time today"}</span><div className="duration-selects"><label><span>{zh ? "小时" : "Hours"}</span><select value={hours} onChange={e => setForm({ ...form, minutes: Number(e.target.value) * 60 + halfHour })}>{Array.from({ length: 17 }, (_, i) => <option value={i} key={i}>{i}</option>)}</select></label><label><span>{zh ? "分钟" : "Minutes"}</span><select value={halfHour} onChange={e => setForm({ ...form, minutes: hours * 60 + Number(e.target.value) })}><option value={0}>00</option><option value={30}>30</option></select></label></div></div><button className="submit-button">{zh ? "计算今日容量" : "Calculate capacity"} <span>→</span></button></form></Sheet>;
 }
 
-function TaskSheet({ language, onClose, onSave }: { language: "en" | "zh"; onClose: () => void; onSave: (task: Omit<Task, "id" | "status">) => void }) {
-  const [title, setTitle] = useState(""); const [category, setCategory] = useState("Academic"); const [minutes, setMinutes] = useState(45); const [energy, setEnergy] = useState(15);
+function TaskSheet({ initial, language, onClose, onSave }: { initial: Task | null; language: "en" | "zh"; onClose: () => void; onSave: (task: Omit<Task, "id" | "status" | "createdAt">) => void }) {
+  const [title, setTitle] = useState(initial?.title || ""); const [category, setCategory] = useState(initial?.category || "Academic"); const [minutes, setMinutes] = useState(initial?.minutes || 45); const [energy, setEnergy] = useState(initial?.energy || 15); const [urgency,setUrgency]=useState<1|2|3>(initial?.urgency || 2);
   const categories = ["Academic", "Career", "Health", "Language", "Life", "Hobby"];
   const zh = language === "zh";
   const categoryZh: Record<string, string> = { Academic: "学业", Career: "事业", Health: "健康", Language: "语言", Life: "生活", Hobby: "兴趣" };
-  return <Sheet language={language} title={zh ? "添加今日任务" : "Add task to today"} intro={zh ? "估计这个执行单位所需的时间和能量。运动可以作为健康类任务添加。" : "Estimate the time and energy required for this execution unit. Exercise can be added as a Health task."} onClose={onClose}><form onSubmit={(e: FormEvent) => { e.preventDefault(); if (title.trim()) onSave({ title: title.trim(), category, minutes, energy }); }}><label className="text-field"><span>{zh ? "任务名称" : "Task title"}</span><input autoFocus required placeholder={zh ? "例如：完成文献综述提纲" : "e.g. Draft literature review outline"} value={title} onChange={e => setTitle(e.target.value)} /></label><label className="text-field"><span>{zh ? "分类" : "Category"}</span><select value={category} onChange={e => setCategory(e.target.value)}>{categories.map(c => <option value={c} key={c}>{zh ? categoryZh[c] : c}</option>)}</select></label><div className="field-row"><label className="text-field"><span>{zh ? "预计分钟" : "Estimated minutes"}</span><input type="number" min="5" value={minutes} onChange={e => setMinutes(Number(e.target.value))} /></label><label className="text-field"><span>{zh ? "预计能量" : "Estimated energy"}</span><input type="number" min="1" max="100" value={energy} onChange={e => setEnergy(Number(e.target.value))} /></label></div><button className="submit-button">{zh ? "加入今日计划" : "Add to today’s plan"} <span>＋</span></button></form></Sheet>;
+  return <Sheet language={language} title={initial ? (zh?"编辑任务":"Edit task") : (zh ? "添加今日任务" : "Add task to today")} intro={zh ? "设置这个执行单位所需的时间、能量和紧急程度。" : "Set the time, energy, and urgency for this execution unit."} onClose={onClose}><form onSubmit={(e: FormEvent) => { e.preventDefault(); if (title.trim()) onSave({ title: title.trim(), category, minutes, energy, urgency }); }}><label className="text-field"><span>{zh ? "任务名称" : "Task title"}</span><input autoFocus required placeholder={zh ? "例如：完成文献综述提纲" : "e.g. Draft literature review outline"} value={title} onChange={e => setTitle(e.target.value)} /></label><label className="text-field"><span>{zh ? "分类" : "Category"}</span><select value={category} onChange={e => setCategory(e.target.value)}>{categories.map(c => <option value={c} key={c}>{zh ? categoryZh[c] : c}</option>)}</select></label><div className="field-row"><label className="text-field"><span>{zh ? "预计分钟" : "Estimated minutes"}</span><input type="number" min="5" value={minutes} onChange={e => setMinutes(Number(e.target.value))} /></label><label className="text-field"><span>{zh ? "预计能量" : "Estimated energy"}</span><input type="number" min="1" max="100" value={energy} onChange={e => setEnergy(Number(e.target.value))} /></label></div><label className="text-field"><span>{zh?"紧急程度":"Urgency"}</span><select value={urgency} onChange={e=>setUrgency(Number(e.target.value) as 1|2|3)}><option value={1}>{zh?"1 · 低":"1 · Low"}</option><option value={2}>{zh?"2 · 中":"2 · Medium"}</option><option value={3}>{zh?"3 · 高":"3 · High"}</option></select></label><button className="submit-button">{initial?(zh?"保存修改":"Save changes"):(zh ? "加入今日计划" : "Add to today’s plan")} <span>✓</span></button></form></Sheet>;
+}
+
+function IdeaSheet({ initial, language, onClose, onSave }: { initial: Idea | null; language:"en"|"zh"; onClose:()=>void; onSave:(idea:Omit<Idea,"id"|"createdAt">)=>void }) {
+  const [title,setTitle]=useState(initial?.title||""); const [description,setDescription]=useState(initial?.description||""); const [category,setCategory]=useState(initial?.category||"Product"); const zh=language==="zh";
+  return <Sheet language={language} title={initial?(zh?"编辑想法":"Edit idea"):(zh?"添加想法":"Add idea")} intro={zh?"想法保存在独立的想法库中，不会自动进入任务列表。":"Ideas remain separate from tasks unless explicitly promoted."} onClose={onClose}><form onSubmit={e=>{e.preventDefault();if(title.trim())onSave({title:title.trim(),description:description.trim(),category:category.trim()||"Other"});}}><label className="text-field"><span>{zh?"标题":"Title"}</span><input autoFocus required value={title} onChange={e=>setTitle(e.target.value)} /></label><label className="text-field"><span>{zh?"描述":"Description"}</span><textarea rows={4} value={description} onChange={e=>setDescription(e.target.value)} /></label><label className="text-field"><span>{zh?"分类":"Category"}</span><input value={category} onChange={e=>setCategory(e.target.value)} /></label><button className="submit-button">{initial?(zh?"保存修改":"Save changes"):(zh?"保存想法":"Save idea")}<span>✓</span></button></form></Sheet>;
 }
 
 function ReflectionSheet({ initial, capacity, language, onClose, onSave }: { initial: Reflection | null; capacity: number; language: "en" | "zh"; onClose: () => void; onSave: (r: Reflection) => void }) {
   const [rating, setRating] = useState(initial?.rating || 3); const [perceived, setPerceived] = useState(initial?.perceivedCapacity || capacity); const [note, setNote] = useState(initial?.note || ""); const [exercised, setExercised] = useState(initial?.exercised || false);
   const zh = language === "zh";
-  return <Sheet language={language} title={zh ? "晚间复盘" : "Daily reflection"} intro={zh ? "记录执行结果、运动情况和回顾性容量估计，用于模型校准。" : "Record execution outcomes, exercise, and a retrospective capacity estimate for model calibration."} onClose={onClose}><form onSubmit={e => { e.preventDefault(); onSave({ rating, perceivedCapacity: perceived, note, exercised, savedAt: new Date().toISOString() }); }}><Scale label={zh ? "今日整体评分" : "Overall day rating"} value={rating} low={zh ? "低" : "Low"} high={zh ? "高" : "High"} onChange={setRating} /><label className="toggle-field"><span><strong>{zh ? "今天是否运动" : "Exercise completed today"}</strong><small>{zh ? "记录任何有意进行的身体活动" : "Any intentional physical activity"}</small></span><input type="checkbox" checked={exercised} onChange={e => setExercised(e.target.checked)} /></label><label className="range-field"><span><strong>{zh ? "回顾性实际容量" : "Retrospective capacity"}</strong><b>{perceived}/100</b></span><input type="range" min="0" max="100" value={perceived} onChange={e => setPerceived(Number(e.target.value))} /></label><label className="text-field"><span>{zh ? "相关因素或例外情况" : "Relevant factors or exceptions"}</span><textarea rows={4} value={note} onChange={e => setNote(e.target.value)} placeholder={zh ? "可选，用于后续分析" : "Optional notes for later analysis"} /></label><button className="submit-button">{zh ? "保存复盘" : "Save reflection"} <span>✓</span></button></form></Sheet>;
+  return <Sheet language={language} title={zh ? "晚间复盘" : "Daily reflection"} intro={zh ? "记录执行结果和当天实际状态，用于校准以后对类似日期的预测。" : "Record outcomes and your actual state to calibrate predictions for similar days."} onClose={onClose}><form onSubmit={e => { e.preventDefault(); onSave({ rating, perceivedCapacity: perceived, note, exercised, savedAt: new Date().toISOString() }); }}><Scale label={zh ? "今日整体评分" : "Overall day rating"} value={rating} low={zh ? "低" : "Low"} high={zh ? "高" : "High"} onChange={setRating} /><label className="toggle-field"><span><strong>{zh ? "今天是否运动" : "Exercise completed today"}</strong><small>{zh ? "记录任何有意进行的身体活动" : "Any intentional physical activity"}</small></span><input type="checkbox" checked={exercised} onChange={e => setExercised(e.target.checked)} /></label><label className="range-field"><span><strong>{zh ? "你今天实际有多少可用精力？" : "How much usable capacity did you actually have today?"}</strong><b>{perceived}/100</b></span><small className="capacity-help">{zh ? "回顾今天，不考虑计划了多少任务，估计你真正能用于执行事情的总精力。" : "Looking back, estimate the total capacity you had for doing things, independent of how much you planned."}</small><input type="range" min="0" max="100" value={perceived} onChange={e => setPerceived(Number(e.target.value))} /></label><label className="text-field"><span>{zh ? "相关因素或例外情况" : "Relevant factors or exceptions"}</span><textarea rows={4} value={note} onChange={e => setNote(e.target.value)} placeholder={zh ? "可选，用于后续分析" : "Optional notes for later analysis"} /></label><button className="submit-button">{zh ? "保存复盘" : "Save reflection"} <span>✓</span></button></form></Sheet>;
 }
