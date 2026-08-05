@@ -197,7 +197,13 @@ body { font-family:Inter,-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Aria
 .auth-card .submit-button { border-radius:5px; background:#244b86; box-shadow:none; }
 .auth-language { position:fixed; right:22px; top:20px; padding:7px 10px; border:1px solid #cbd3df; border-radius:4px; background:#fff; color:#244b86; font-size:10px; cursor:pointer; }
 .auth-error { margin:-6px 0 12px; color:#a03939; font-size:10px; }
+.auth-message { margin:-6px 0 12px; padding:9px 10px; border-left:3px solid #52745c; background:#f0f5f1; color:#45634e; font-size:9px; line-height:1.5; }
 .auth-footnote { display:block; margin-top:19px; color:#8a95a5; font-size:8px; }
+.auth-tabs { display:grid; grid-template-columns:1fr 1fr; margin:0 0 18px; border-bottom:1px solid #d9dfe7; }
+.auth-tabs button { padding:9px 6px; border:0; border-bottom:2px solid transparent; background:transparent; color:#7a8697; font:inherit; font-size:9px; font-weight:650; cursor:pointer; }
+.auth-tabs button.active { border-bottom-color:#244b86; color:#244b86; }
+.auth-card form .text-field { margin-bottom:13px; }
+.auth-text-button { display:block; margin:14px auto 0; padding:4px; border:0; background:transparent; color:#244b86; font:inherit; font-size:9px; cursor:pointer; text-decoration:underline; text-underline-offset:3px; }
 .secondary-button { width:100%; padding:12px; border:1px solid #cbd3df; border-radius:5px; background:#fff; color:#244b86; font-size:10px; cursor:pointer; }
 .account-tools { display:flex; align-items:center; gap:6px; margin-left:auto; }
 .account-tools .language-toggle { margin-left:0; }
