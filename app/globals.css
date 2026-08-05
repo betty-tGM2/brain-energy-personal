@@ -163,6 +163,12 @@ body { font-family:Inter,-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Aria
 .observed-capacity strong { margin-top:5px; color:#27364e; font-size:12px; }
 .observed-capacity small { margin-top:3px; color:#7b8799; font-size:8px; line-height:1.4; }
 .reflection-warning { margin:-3px 0 12px; padding:9px 10px; border-left:3px solid #a87822; background:#fff8e9; color:#795a1d; font-size:9px; line-height:1.45; }
+.choice-field { margin:0 0 14px; padding:0; border:0; }
+.choice-field legend { margin-bottom:9px; color:#26344b; font-size:10px; font-weight:650; }
+.choice-buttons { display:grid; grid-template-columns:repeat(3,1fr); gap:7px; }
+.choice-buttons button { padding:10px 6px; border:1px solid #d4dbe5; border-radius:4px; background:#fff; color:#526077; font-size:9px; cursor:pointer; }
+.choice-buttons button.selected { border-color:#244b86; background:#244b86; color:#fff; }
+.inference-note { margin:-4px 0 14px; padding:9px 10px; background:#eef2f7; color:#69768a; font-size:8px; line-height:1.5; }
 .time-section { margin-bottom:6px; padding:13px 0 4px; border-top:1px solid #e1e5eb; }
 .field-label { display:block; margin-bottom:10px; color:#4c596f; font-size:11px; font-weight:650; }
 .time-section .text-field { margin-bottom:6px; }
