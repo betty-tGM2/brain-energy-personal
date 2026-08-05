@@ -197,6 +197,16 @@ export default function Home() {
   const plannedEnergy = activeTasks.reduce((sum, task) => sum + task.energy, 0);
   const plannedMinutes = activeTasks.reduce((sum, task) => sum + task.minutes, 0);
   const completed = data.tasks.filter((task) => task.status === "completed").length;
+  const completedEnergy = data.tasks.filter((task) => task.status === "completed").reduce((sum, task) => sum + task.energy, 0);
+  const remainingEnergy = Math.max(0, capacity - completedEnergy);
+  const unfinishedTasks = data.tasks.filter((task) => task.status === "planned" || task.status === "started");
+  let fitEnergy = 0;
+  const tasksThatFit = [...unfinishedTasks].sort((a, b) => a.energy - b.energy).filter((task) => {
+    if (fitEnergy + task.energy > remainingEnergy) return false;
+    fitEnergy += task.energy;
+    return true;
+  }).length;
+  const usedRatio = Math.min(100, Math.round((completedEnergy / capacity) * 100));
   const loadRatio = Math.round((plannedEnergy / capacity) * 100);
   const zh = language === "zh";
   const assessmentLabel = loadRatio > 100
@@ -283,11 +293,12 @@ export default function Home() {
             <button className="round-add" aria-label={zh ? "添加任务" : "Add task"} onClick={() => openTaskEditor()}>＋</button>
           </div>
 
-          <article className={`load-card ${loadRatio > 100 ? "warning" : ""}`}>
-            <div><span className="load-icon">{loadRatio > 100 ? "!" : "✓"}</span><div><strong>{assessmentLabel}</strong><p>{plannedEnergy} {zh ? "能量" : "energy"} · {Math.round(plannedMinutes / 60 * 10) / 10} {zh ? "小时" : "hours"}</p></div></div>
-            <span className="load-percent">{loadRatio}%</span>
-            <div className="load-track"><span style={{ width: `${Math.min(loadRatio, 100)}%` }} /></div>
-            {loadRatio > 100 && <p className="warning-copy">{zh ? "计划能量超过今天的预计容量。该提示仅供参考，不会阻止计划。" : "Planned energy exceeds today’s estimated capacity. This is advisory and does not block the plan."}</p>}
+          <article className={`load-card energy-budget ${remainingEnergy === 0 ? "depleted" : ""}`}>
+            <div className="remaining-summary"><span className="load-icon">E</span><div><small>{zh ? "今日剩余能量" : "ENERGY REMAINING"}</small><strong>{remainingEnergy}<em> / {capacity}</em></strong></div></div>
+            <span className="used-label">{zh ? `已使用 ${completedEnergy}` : `${completedEnergy} used`}</span>
+            <div className="load-track used-track"><span style={{ width: `${usedRatio}%` }} /></div>
+            <div className="task-fit"><strong>{unfinishedTasks.length === 0 ? (zh ? "今日计划已处理完毕" : "No unfinished tasks") : (zh ? `预计还可完成 ${tasksThatFit} / ${unfinishedTasks.length} 项任务` : `Estimated room for ${tasksThatFit} of ${unfinishedTasks.length} unfinished tasks`)}</strong><p>{zh ? "按剩余任务的能量估计；实际消耗可在复盘中校准。" : "Based on estimated task energy; actual usage is calibrated in reflection."}</p></div>
+            <div className={`plan-load ${loadRatio > 100 ? "over" : ""}`}><span>{zh ? "计划总负载" : "Plan load"}</span><b>{plannedEnergy} / {capacity} · {loadRatio}%</b><small>{assessmentLabel} · {Math.round(plannedMinutes / 60 * 10) / 10}h</small></div>
           </article>
 
           <div className="task-list">
@@ -301,7 +312,7 @@ export default function Home() {
                   <h3>{zh ? (sampleTitleZh[task.id] || task.title) : task.title}</h3>
                   <p>{task.minutes} {zh ? "分钟" : "min"} <i /> {task.energy} {zh ? "能量" : "energy"} <i /> {zh ? "紧急度" : "urgency"} {task.urgency}/3</p>
                 </div>
-                <div className="task-actions"><button onClick={() => openTaskEditor(task)}>{zh ? "编辑" : "Edit"}</button><button onClick={() => setTaskStatus(task.id, task.status === "started" ? "skipped" : "started")}>{task.status === "started" ? (zh ? "跳过" : "Skip") : task.status === "skipped" ? (zh ? "已跳过" : "Skipped") : (zh ? "开始" : "Start")}</button><button className="danger" aria-label={zh ? "删除任务" : "Delete task"} onClick={() => deleteTask(task.id)}>×</button></div>
+                <div className="task-actions"><button onClick={() => openTaskEditor(task)}>{zh ? "编辑" : "Edit"}</button>{task.status !== "completed" && <button onClick={() => setTaskStatus(task.id, task.status === "started" ? "skipped" : "started")}>{task.status === "started" ? (zh ? "跳过" : "Skip") : task.status === "skipped" ? (zh ? "已跳过" : "Skipped") : (zh ? "开始" : "Start")}</button>}<button className="danger" aria-label={zh ? "删除任务" : "Delete task"} onClick={() => deleteTask(task.id)}>×</button></div>
               </article>
             ))}
           </div>

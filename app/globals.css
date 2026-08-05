@@ -80,6 +80,23 @@ body { font-family:Inter,-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Aria
 .load-track span { background:#2f5ea8; }
 .load-card.warning { background:#fff8e8; border-color:#dfc57b; }
 .load-card.warning .load-icon,.load-card.warning .load-track span { background:#9a6d00; }
+.energy-budget { grid-template-columns:1fr auto; padding:16px; background:#fff; }
+.remaining-summary { display:flex; align-items:center; gap:11px; }
+.remaining-summary>div { display:flex; flex-direction:column; }
+.remaining-summary small { color:#69768b; font-size:8px; font-weight:700; letter-spacing:.1em; }
+.remaining-summary strong { margin-top:2px; font-size:25px; line-height:1; letter-spacing:-.7px; }
+.remaining-summary strong em { color:#8994a5; font-size:12px; font-style:normal; font-weight:500; }
+.energy-budget .load-icon { background:#244b86; font-size:9px; font-weight:700; }
+.used-label { align-self:center; color:#5e6a7e; font-size:10px; font-weight:600; }
+.used-track { height:7px; background:#e1e6ed; }
+.used-track span { background:#315fa8; transition:width .25s ease; }
+.task-fit { grid-column:1/-1; padding:11px 12px; border:1px solid #dce3ec; border-radius:5px; background:#f5f7fa; }
+.task-fit strong { display:block; color:#27364e; font-size:11px; }
+.task-fit p { margin:4px 0 0; color:#748096; font-size:8px; line-height:1.45; }
+.plan-load { grid-column:1/-1; display:grid; grid-template-columns:1fr auto; gap:3px 10px; padding-top:9px; border-top:1px solid #e1e5eb; color:#69758a; }
+.plan-load span { font-size:9px; font-weight:600; }.plan-load b { font-size:9px; }.plan-load small { grid-column:1/-1; font-size:8px; }
+.plan-load.over b,.plan-load.over small { color:#946516; }
+.energy-budget.depleted .load-icon,.energy-budget.depleted .used-track span { background:#9a3f3f; }
 .task-list { gap:8px; }
 .task-card { padding:13px; border-radius:7px; border-color:#dce1e8; background:#fff; box-shadow:none; }
 .task-check { width:29px; height:29px; border-radius:4px; background:#f5f7f9; }
