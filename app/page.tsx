@@ -1,6 +1,12 @@
 "use client";
 
 import { FormEvent, useEffect, useState } from "react";
+import { createClient, Session } from "@supabase/supabase-js";
+
+const supabase = createClient(
+  "https://gfoagyikxpmirteasdqu.supabase.co",
+  "sb_publishable_gcUk1GxBgNhShE_8Gqkx2w_aFI1SPlr",
+);
 
 type Status = "planned" | "started" | "completed" | "skipped";
 type Tab = "today" | "tasks" | "ideas" | "history";
@@ -177,6 +183,17 @@ export default function Home() {
   const [ideaOpen, setIdeaOpen] = useState(false);
   const [editingIdea, setEditingIdea] = useState<Idea | null>(null);
   const [reflectionOpen, setReflectionOpen] = useState(false);
+  const [session, setSession] = useState<Session | null>(null);
+  const [authReady, setAuthReady] = useState(false);
+  const [cloudUserId, setCloudUserId] = useState<string | null>(null);
+  const [accessDenied, setAccessDenied] = useState(false);
+  const [syncStatus, setSyncStatus] = useState<"idle"|"saving"|"saved"|"error">("idle");
+
+  useEffect(() => {
+    supabase.auth.getSession().then(({data:{session}})=>{setSession(session);setAuthReady(true);});
+    const {data:{subscription}}=supabase.auth.onAuthStateChange((_event,next)=>{setSession(next);setCloudUserId(null);setAccessDenied(false);setAuthReady(true);});
+    return ()=>subscription.unsubscribe();
+  },[]);
 
   useEffect(() => {
     const storedLanguage = window.localStorage.getItem("brain-energy-language");
@@ -215,6 +232,33 @@ export default function Home() {
   useEffect(() => {
     if (hydrated) window.localStorage.setItem("brain-energy-language", language);
   }, [language, hydrated]);
+
+  useEffect(()=>{
+    if(!hydrated||!session?.user||cloudUserId===session.user.id)return;
+    let cancelled=false;
+    (async()=>{
+      const {data:allowed,error:allowError}=await supabase.rpc("is_allowed_user");
+      if(cancelled)return;
+      if(allowError||!allowed){setAccessDenied(true);return;}
+      const {data:remote,error}=await supabase.from("user_app_state").select("data").eq("user_id",session.user.id).maybeSingle();
+      if(cancelled)return;
+      if(error){setSyncStatus("error");return;}
+      if(remote?.data)setData(remote.data as AppData);
+      else await supabase.from("user_app_state").upsert({user_id:session.user.id,data,updated_at:new Date().toISOString()});
+      if(!cancelled){setCloudUserId(session.user.id);setSyncStatus("saved");}
+    })();
+    return()=>{cancelled=true;};
+  },[hydrated,session,cloudUserId]);
+
+  useEffect(()=>{
+    if(!cloudUserId)return;
+    setSyncStatus("saving");
+    const timer=window.setTimeout(async()=>{
+      const {error}=await supabase.from("user_app_state").upsert({user_id:cloudUserId,data,updated_at:new Date().toISOString()});
+      setSyncStatus(error?"error":"saved");
+    },600);
+    return()=>window.clearTimeout(timer);
+  },[data,cloudUserId]);
 
   const today = dateKey();
   const day = data.days[today] || defaultDay;
@@ -281,6 +325,10 @@ export default function Home() {
   const categoryZh: Record<string, string> = { Academic: "学业", Career: "事业", Health: "健康", Language: "语言", Life: "生活", Hobby: "兴趣" };
   const sampleTitleZh: Record<string, string> = { "sample-1": "完成研究方法作业", "sample-2": "法语听力练习", "sample-3": "晚饭后散步" };
 
+  if(!authReady)return <main className="auth-shell"><div className="auth-card"><div className="brand-mark"><span/></div><p className="eyebrow">BRAIN ENERGY</p><h1>{language==="zh"?"正在验证账户":"Verifying account"}</h1><p>{language==="zh"?"正在建立安全连接。":"Establishing a secure session."}</p></div></main>;
+  if(!session)return <AuthScreen language={language} onLanguage={()=>setLanguage(language==="zh"?"en":"zh")}/>;
+  if(accessDenied)return <main className="auth-shell"><div className="auth-card"><p className="eyebrow">ACCESS CONTROL</p><h1>{language==="zh"?"这个邮箱尚未获邀":"This email is not invited"}</h1><p>{session.user.email}</p><button className="submit-button" onClick={()=>supabase.auth.signOut()}>{language==="zh"?"使用其他邮箱":"Use another email"}</button></div></main>;
+
   return (
     <main className="app-shell">
       <div className="ambient ambient-one" />
@@ -289,7 +337,7 @@ export default function Home() {
       <header className="topbar">
         <div className="brand-mark" aria-hidden="true"><span /></div>
         <div className="brand-copy"><strong>Brain Energy</strong><span>{zh ? "个人执行模型" : "Personal execution model"}</span></div>
-        <button className="language-toggle" aria-label={zh ? "Switch to English" : "切换到中文"} onClick={() => setLanguage(zh ? "en" : "zh")}>{zh ? "EN" : "中文"}</button>
+        <div className="account-tools"><span className={`sync-status ${syncStatus}`}>{syncStatus==="saving"?(zh?"同步中":"Syncing"):syncStatus==="error"?(zh?"同步失败":"Sync error"):(zh?"已同步":"Synced")}</span><button className="language-toggle" aria-label={zh ? "Switch to English" : "切换到中文"} onClick={() => setLanguage(zh ? "en" : "zh")}>{zh ? "EN" : "中文"}</button><button className="signout-button" onClick={()=>supabase.auth.signOut()}>{zh?"退出":"Sign out"}</button></div>
       </header>
 
       {tab === "today" && (
@@ -366,6 +414,12 @@ export default function Home() {
       {reflectionOpen && <ReflectionSheet initial={day.reflection} capacity={capacity} completedEnergy={completedEnergy} completedCount={completed} totalCount={activeTasks.length} latestCompletedAt={day.tasks.map(task=>task.completedAt||"").sort().at(-1)||""} language={language} onClose={() => setReflectionOpen(false)} onSave={(reflection) => { setData(current => ({ ...current, days:{...current.days,[today]:{...(current.days[today]||structuredClone(defaultDay)),reflection}} })); setReflectionOpen(false); }} />}
     </main>
   );
+}
+
+function AuthScreen({language,onLanguage}:{language:"en"|"zh";onLanguage:()=>void}){
+  const zh=language==="zh"; const [email,setEmail]=useState(""); const [sent,setSent]=useState(false); const [error,setError]=useState(""); const [loading,setLoading]=useState(false);
+  const submit=async(e:FormEvent)=>{e.preventDefault();setError("");setLoading(true);const normalized=email.trim().toLowerCase();const {data:allowed,error:checkError}=await supabase.rpc("is_email_allowed",{candidate_email:normalized});if(checkError||!allowed){setError(zh?"这个邮箱尚未获得邀请。":"This email has not been invited.");setLoading(false);return;}const {error:signInError}=await supabase.auth.signInWithOtp({email:normalized,options:{emailRedirectTo:window.location.origin}});if(signInError)setError(signInError.message);else setSent(true);setLoading(false);};
+  return <main className="auth-shell"><button className="auth-language" onClick={onLanguage}>{zh?"EN":"中文"}</button><section className="auth-card"><div className="brand-mark"><span/></div><p className="eyebrow">BRAIN ENERGY</p><h1>{zh?"登录个人执行模型":"Sign in to your execution model"}</h1><p>{sent?(zh?"登录链接已发送。请在同一设备打开邮件中的链接。":"A sign-in link has been sent. Open it on this device."):(zh?"仅受邀邮箱可以访问。记录会在你的设备之间安全同步。":"Access is limited to invited email addresses. Records sync securely across your devices.")}</p>{!sent&&<form onSubmit={submit}><label className="text-field"><span>{zh?"邮箱":"Email"}</span><input type="email" autoComplete="email" required value={email} onChange={e=>setEmail(e.target.value)} placeholder="name@example.com"/></label>{error&&<p className="auth-error">{error}</p>}<button className="submit-button" disabled={loading}>{loading?(zh?"正在检查…":"Checking…"):(zh?"发送登录链接":"Send sign-in link")}<span>→</span></button></form>}{sent&&<button className="secondary-button" onClick={()=>setSent(false)}>{zh?"使用其他邮箱":"Use another email"}</button>}<small className="auth-footnote">{zh?"无需密码。登录链接有时效性。":"No password required. Sign-in links expire."}</small></section></main>;
 }
 
 function NavButton({ active, icon, label, onClick }: { active: boolean; icon: string; label: string; onClick: () => void }) {

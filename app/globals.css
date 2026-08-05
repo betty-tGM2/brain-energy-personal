@@ -189,3 +189,19 @@ body { font-family:Inter,-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Aria
 .duration-selects label span { color:#6f7b8f; font-size:9px; font-weight:600; }
 .duration-selects select { width:100%; padding:11px 12px; border:1px solid #d8dee7; border-radius:5px; background:#fff; color:var(--ink); }
 @media (min-width:700px){.app-shell{border-radius:10px}.bottom-nav{border-radius:0 0 10px 10px}.sheet{border-radius:10px}}
+.auth-shell { min-height:100dvh; display:grid; place-items:center; padding:24px; background:#edf1f5; }
+.auth-card { position:relative; width:min(100%,420px); padding:30px; border:1px solid #d5dce6; border-radius:9px; background:#fff; box-shadow:0 16px 45px rgba(28,42,63,.08); }
+.auth-card .brand-mark { margin:0 0 25px; }
+.auth-card h1 { margin:0 0 10px; color:#172033; font-size:23px; font-weight:650; line-height:1.25; }
+.auth-card>p:not(.eyebrow):not(.auth-error) { margin-bottom:24px; color:#69768a; font-size:11px; line-height:1.65; }
+.auth-card .submit-button { border-radius:5px; background:#244b86; box-shadow:none; }
+.auth-language { position:fixed; right:22px; top:20px; padding:7px 10px; border:1px solid #cbd3df; border-radius:4px; background:#fff; color:#244b86; font-size:10px; cursor:pointer; }
+.auth-error { margin:-6px 0 12px; color:#a03939; font-size:10px; }
+.auth-footnote { display:block; margin-top:19px; color:#8a95a5; font-size:8px; }
+.secondary-button { width:100%; padding:12px; border:1px solid #cbd3df; border-radius:5px; background:#fff; color:#244b86; font-size:10px; cursor:pointer; }
+.account-tools { display:flex; align-items:center; gap:6px; margin-left:auto; }
+.account-tools .language-toggle { margin-left:0; }
+.signout-button { height:30px; padding:0 8px; border:0; background:transparent; color:#718096; font-size:8px; cursor:pointer; }
+.sync-status { color:#708096; font-size:7px; font-weight:650; letter-spacing:.04em; }
+.sync-status.error { color:#a03939; }
+@media (max-width:430px){.sync-status{display:none}.brand-copy span{display:none}.signout-button{padding:0 3px}.account-tools{gap:3px}}
