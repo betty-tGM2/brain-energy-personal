@@ -1,12 +1,20 @@
 "use client";
 
-import { FormEvent, useEffect, useState } from "react";
-import { createClient, Session } from "@supabase/supabase-js";
+import { FormEvent, useEffect, useRef, useState } from "react";
+import cloudbase from "@cloudbase/js-sdk";
 
-const supabase = createClient(
-  "https://gfoagyikxpmirteasdqu.supabase.co",
-  "sb_publishable_gcUk1GxBgNhShE_8Gqkx2w_aFI1SPlr",
-);
+const cloudApp = cloudbase.init({
+  env: "brain-energy-d2g7535bj5c30e336",
+  region: "ap-shanghai",
+  accessKey: process.env.NEXT_PUBLIC_CLOUDBASE_ACCESS_KEY || "",
+  auth: { detectSessionInUrl: true },
+});
+const cloudAuth = cloudApp.auth as any;
+const cloudDb = cloudApp.rdb() as any;
+
+type CloudSession = {
+  user: { id: string; is_anonymous?: boolean };
+};
 
 type Status = "planned" | "started" | "completed" | "skipped";
 type Tab = "today" | "tasks" | "ideas" | "history";
@@ -183,15 +191,22 @@ export default function Home() {
   const [ideaOpen, setIdeaOpen] = useState(false);
   const [editingIdea, setEditingIdea] = useState<Idea | null>(null);
   const [reflectionOpen, setReflectionOpen] = useState(false);
-  const [session, setSession] = useState<Session | null>(null);
+  const [session, setSession] = useState<CloudSession | null>(null);
   const [authReady, setAuthReady] = useState(false);
-  const [passwordRecovery, setPasswordRecovery] = useState(false);
   const [cloudUserId, setCloudUserId] = useState<string | null>(null);
   const [syncStatus, setSyncStatus] = useState<"idle"|"saving"|"saved"|"error">("idle");
 
   useEffect(() => {
-    supabase.auth.getSession().then(({data:{session}})=>{setSession(session);setAuthReady(true);});
-    const {data:{subscription}}=supabase.auth.onAuthStateChange((event,next)=>{if(event==="PASSWORD_RECOVERY")setPasswordRecovery(true);setSession(next);setCloudUserId(null);setAuthReady(true);});
+    cloudAuth.getSession().then(({data}:{data:{session?:CloudSession}})=>{
+      const next=data?.session;
+      setSession(next&&!next.user?.is_anonymous?next:null);
+      setAuthReady(true);
+    });
+    const {data:{subscription}}=cloudAuth.onAuthStateChange((_event:string,next:CloudSession|null)=>{
+      setSession(next&&!next.user?.is_anonymous?next:null);
+      setCloudUserId(null);
+      setAuthReady(true);
+    });
     return ()=>subscription.unsubscribe();
   },[]);
 
@@ -237,11 +252,12 @@ export default function Home() {
     if(!hydrated||!session?.user||cloudUserId===session.user.id)return;
     let cancelled=false;
     (async()=>{
-      const {data:remote,error}=await supabase.from("user_app_state").select("data").eq("user_id",session.user.id).maybeSingle();
+      const {data:rows,error}=await cloudDb.from("user_app_state").select("data").eq("user_id",session.user.id);
+      const remote=rows?.[0];
       if(cancelled)return;
       if(error){setSyncStatus("error");return;}
       if(remote?.data)setData(remote.data as AppData);
-      else await supabase.from("user_app_state").upsert({user_id:session.user.id,data,updated_at:new Date().toISOString()});
+      else await cloudDb.from("user_app_state").upsert({user_id:session.user.id,data,updated_at:new Date().toISOString()},{onConflict:"user_id"});
       if(!cancelled){setCloudUserId(session.user.id);setSyncStatus("saved");}
     })();
     return()=>{cancelled=true;};
@@ -251,7 +267,7 @@ export default function Home() {
     if(!cloudUserId)return;
     setSyncStatus("saving");
     const timer=window.setTimeout(async()=>{
-      const {error}=await supabase.from("user_app_state").upsert({user_id:cloudUserId,data,updated_at:new Date().toISOString()});
+      const {error}=await cloudDb.from("user_app_state").upsert({user_id:cloudUserId,data,updated_at:new Date().toISOString()},{onConflict:"user_id"});
       setSyncStatus(error?"error":"saved");
     },600);
     return()=>window.clearTimeout(timer);
@@ -324,7 +340,6 @@ export default function Home() {
 
   if(!authReady)return <main className="auth-shell"><div className="auth-card"><div className="brand-mark"><span/></div><p className="eyebrow">BRAIN ENERGY</p><h1>{language==="zh"?"正在验证账户":"Verifying account"}</h1><p>{language==="zh"?"正在建立安全连接。":"Establishing a secure session."}</p></div></main>;
   if(!session)return <AuthScreen language={language} onLanguage={()=>setLanguage(language==="zh"?"en":"zh")}/>;
-  if(passwordRecovery)return <PasswordRecoveryScreen language={language} onLanguage={()=>setLanguage(language==="zh"?"en":"zh")} onDone={()=>setPasswordRecovery(false)}/>;
 
   return (
     <main className="app-shell">
@@ -334,7 +349,7 @@ export default function Home() {
       <header className="topbar">
         <div className="brand-mark" aria-hidden="true"><span /></div>
         <div className="brand-copy"><strong>Brain Energy</strong><span>{zh ? "个人执行模型" : "Personal execution model"}</span></div>
-        <div className="account-tools"><span className={`sync-status ${syncStatus}`}>{syncStatus==="saving"?(zh?"同步中":"Syncing"):syncStatus==="error"?(zh?"同步失败":"Sync error"):(zh?"已同步":"Synced")}</span><button className="language-toggle" aria-label={zh ? "Switch to English" : "切换到中文"} onClick={() => setLanguage(zh ? "en" : "zh")}>{zh ? "EN" : "中文"}</button><button className="signout-button" onClick={()=>supabase.auth.signOut()}>{zh?"退出":"Sign out"}</button></div>
+        <div className="account-tools"><span className={`sync-status ${syncStatus}`}>{syncStatus==="saving"?(zh?"同步中":"Syncing"):syncStatus==="error"?(zh?"同步失败":"Sync error"):(zh?"已同步":"Synced")}</span><button className="language-toggle" aria-label={zh ? "Switch to English" : "切换到中文"} onClick={() => setLanguage(zh ? "en" : "zh")}>{zh ? "EN" : "中文"}</button><button className="signout-button" onClick={()=>cloudAuth.signOut()}>{zh?"退出":"Sign out"}</button></div>
       </header>
 
       {tab === "today" && (
@@ -414,18 +429,32 @@ export default function Home() {
 }
 
 function AuthScreen({language,onLanguage}:{language:"en"|"zh";onLanguage:()=>void}){
-  const zh=language==="zh"; const [mode,setMode]=useState<"signin"|"signup"|"recovery">("signin"); const [email,setEmail]=useState(""); const [password,setPassword]=useState(""); const [confirm,setConfirm]=useState(""); const [message,setMessage]=useState(""); const [error,setError]=useState(""); const [loading,setLoading]=useState(false);
-  const changeMode=(next:typeof mode)=>{setMode(next);setError("");setMessage("");setPassword("");setConfirm("");};
-  const friendlyError=(text:string)=>text.toLowerCase().includes("rate limit")?(zh?"邮件请求过于频繁，请稍后再试。":"Too many email requests. Please try again later."):text.toLowerCase().includes("invalid login")?(zh?"邮箱或密码不正确。如果你还没有密码，请选择“设置或忘记密码”。":"Incorrect email or password. If you have not set a password, use Set or forgot password."):text;
-  const submit=async(e:FormEvent)=>{e.preventDefault();setError("");setMessage("");setLoading(true);const normalized=email.trim().toLowerCase();if(mode!=="recovery"&&password.length<8){setError(zh?"密码至少需要 8 个字符。":"Password must contain at least 8 characters.");setLoading(false);return;}if(mode==="signup"&&password!==confirm){setError(zh?"两次输入的密码不一致。":"Passwords do not match.");setLoading(false);return;}let actionError=null;if(mode==="signin"){({error:actionError}=await supabase.auth.signInWithPassword({email:normalized,password}));}else if(mode==="signup"){({error:actionError}=await supabase.auth.signUp({email:normalized,password,options:{emailRedirectTo:window.location.origin}}));if(!actionError)setMessage(zh?"账户已创建。请打开确认邮件，然后使用邮箱和密码登录。":"Account created. Confirm your email, then sign in with your email and password.");}else{({error:actionError}=await supabase.auth.resetPasswordForEmail(normalized,{redirectTo:window.location.origin}));if(!actionError)setMessage(zh?"密码设置链接已发送。请打开最新一封邮件。":"A password setup link has been sent. Open the latest email.");}if(actionError)setError(friendlyError(actionError.message));setLoading(false);};
-  const title=mode==="signin"?(zh?"登录个人执行模型":"Sign in to your execution model"):mode==="signup"?(zh?"创建体验账户":"Create an account"):(zh?"设置或重置密码":"Set or reset password");
-  return <main className="auth-shell"><button className="auth-language" onClick={onLanguage}>{zh?"EN":"中文"}</button><section className="auth-card"><div className="brand-mark"><span/></div><p className="eyebrow">BRAIN ENERGY</p><h1>{title}</h1><p>{zh?"任何邮箱都可以注册。每个账户的记录独立存储，其他用户无法查看。":"Anyone can register with an email address. Records are private to each account and sync across devices."}</p><div className="auth-tabs"><button className={mode==="signin"?"active":""} type="button" onClick={()=>changeMode("signin")}>{zh?"登录":"Sign in"}</button><button className={mode==="signup"?"active":""} type="button" onClick={()=>changeMode("signup")}>{zh?"创建账户":"Create account"}</button></div><form onSubmit={submit}><label className="text-field"><span>{zh?"邮箱":"Email"}</span><input type="email" autoComplete="email" required value={email} onChange={e=>setEmail(e.target.value)} placeholder="name@example.com"/></label>{mode!=="recovery"&&<label className="text-field"><span>{zh?"密码":"Password"}</span><input type="password" autoComplete={mode==="signin"?"current-password":"new-password"} minLength={8} required value={password} onChange={e=>setPassword(e.target.value)} placeholder={zh?"至少 8 个字符":"At least 8 characters"}/></label>}{mode==="signup"&&<label className="text-field"><span>{zh?"确认密码":"Confirm password"}</span><input type="password" autoComplete="new-password" minLength={8} required value={confirm} onChange={e=>setConfirm(e.target.value)}/></label>}{error&&<p className="auth-error">{error}</p>}{message&&<p className="auth-message">{message}</p>}<button className="submit-button" disabled={loading}>{loading?(zh?"处理中…":"Working…"):mode==="signin"?(zh?"登录":"Sign in"):mode==="signup"?(zh?"创建账户":"Create account"):(zh?"发送密码设置链接":"Send password setup link")}<span>→</span></button></form><button className="auth-text-button" type="button" onClick={()=>changeMode(mode==="recovery"?"signin":"recovery")}>{mode==="recovery"?(zh?"返回登录":"Back to sign in"):(zh?"设置或忘记密码":"Set or forgot password")}</button><small className="auth-footnote">{mode==="signup"?(zh?"首次创建账户需要确认邮箱。":"Email confirmation is required for a new account."):(zh?"密码登录不会发送登录邮件。":"Password sign-in does not send login emails.")}</small></section></main>;
-}
-
-function PasswordRecoveryScreen({language,onLanguage,onDone}:{language:"en"|"zh";onLanguage:()=>void;onDone:()=>void}){
-  const zh=language==="zh"; const [password,setPassword]=useState(""); const [confirm,setConfirm]=useState(""); const [error,setError]=useState(""); const [loading,setLoading]=useState(false);
-  const submit=async(e:FormEvent)=>{e.preventDefault();setError("");if(password.length<8){setError(zh?"密码至少需要 8 个字符。":"Password must contain at least 8 characters.");return;}if(password!==confirm){setError(zh?"两次输入的密码不一致。":"Passwords do not match.");return;}setLoading(true);const {error:updateError}=await supabase.auth.updateUser({password});setLoading(false);if(updateError)setError(updateError.message);else onDone();};
-  return <main className="auth-shell"><button className="auth-language" onClick={onLanguage}>{zh?"EN":"中文"}</button><section className="auth-card"><div className="brand-mark"><span/></div><p className="eyebrow">BRAIN ENERGY</p><h1>{zh?"设置新密码":"Set a new password"}</h1><p>{zh?"为这个账户设置一个至少 8 个字符的密码。":"Set a password of at least 8 characters for this account."}</p><form onSubmit={submit}><label className="text-field"><span>{zh?"新密码":"New password"}</span><input type="password" autoComplete="new-password" minLength={8} required value={password} onChange={e=>setPassword(e.target.value)}/></label><label className="text-field"><span>{zh?"确认新密码":"Confirm new password"}</span><input type="password" autoComplete="new-password" minLength={8} required value={confirm} onChange={e=>setConfirm(e.target.value)}/></label>{error&&<p className="auth-error">{error}</p>}<button className="submit-button" disabled={loading}>{loading?(zh?"正在保存…":"Saving…"):(zh?"保存密码":"Save password")}<span>→</span></button></form></section></main>;
+  const zh=language==="zh";
+  const [email,setEmail]=useState("");
+  const [code,setCode]=useState("");
+  const [codeSent,setCodeSent]=useState(false);
+  const [message,setMessage]=useState("");
+  const [error,setError]=useState("");
+  const [loading,setLoading]=useState(false);
+  const verifyOtp=useRef<null|((params:{token:string})=>Promise<{error?:{message?:string}|null}>)>(null);
+  const sendCode=async(e:FormEvent)=>{
+    e.preventDefault(); setError(""); setMessage(""); setLoading(true);
+    const {data,error:sendError}=await cloudAuth.signInWithOtp({email:email.trim().toLowerCase(),options:{shouldCreateUser:true}});
+    setLoading(false);
+    if(sendError){setError(sendError.message);return;}
+    verifyOtp.current=data.verifyOtp;
+    setCodeSent(true);
+    setMessage(zh?"验证码已发送。新邮箱会自动创建独立账户。":"Verification code sent. A new email address will create a private account automatically.");
+  };
+  const verifyCode=async(e:FormEvent)=>{
+    e.preventDefault(); setError("");
+    if(!verifyOtp.current){setError(zh?"请先发送验证码。":"Send a verification code first.");return;}
+    setLoading(true);
+    const {error:verifyError}=await verifyOtp.current({token:code.trim()});
+    setLoading(false);
+    if(verifyError)setError(verifyError.message||String(verifyError));
+  };
+  return <main className="auth-shell"><button className="auth-language" onClick={onLanguage}>{zh?"EN":"中文"}</button><section className="auth-card"><div className="brand-mark"><span/></div><p className="eyebrow">BRAIN ENERGY</p><h1>{zh?"登录个人执行模型":"Sign in to your execution model"}</h1><p>{zh?"使用邮箱验证码登录。首次使用的邮箱会自动创建账户；每个账户的数据相互隔离。":"Sign in with an email verification code. A first-time email creates an account automatically; account data remains isolated."}</p><form onSubmit={codeSent?verifyCode:sendCode}><label className="text-field"><span>{zh?"邮箱":"Email"}</span><input type="email" autoComplete="email" required disabled={codeSent} value={email} onChange={e=>setEmail(e.target.value)} placeholder="name@example.com"/></label>{codeSent&&<label className="text-field"><span>{zh?"6 位验证码":"6-digit code"}</span><input inputMode="numeric" autoComplete="one-time-code" pattern="[0-9]{6}" maxLength={6} required value={code} onChange={e=>setCode(e.target.value.replace(/\D/g,""))} placeholder="123456"/></label>}{error&&<p className="auth-error">{error}</p>}{message&&<p className="auth-message">{message}</p>}<button className="submit-button" disabled={loading}>{loading?(zh?"处理中…":"Working…"):codeSent?(zh?"验证并登录":"Verify and sign in"):(zh?"发送验证码":"Send verification code")}<span>→</span></button></form>{codeSent&&<button className="auth-text-button" type="button" onClick={()=>{setCodeSent(false);setCode("");setMessage("");setError("");verifyOtp.current=null;}}>{zh?"更换邮箱或重新发送":"Change email or resend"}</button>}<small className="auth-footnote">{zh?"验证码登录不需要设置或记住密码。":"Verification-code sign-in does not require a password."}</small></section></main>;
 }
 
 function NavButton({ active, icon, label, onClick }: { active: boolean; icon: string; label: string; onClick: () => void }) {
