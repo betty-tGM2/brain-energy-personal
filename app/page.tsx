@@ -206,8 +206,12 @@ export default function Home() {
       setAuthReady(true);
     });
     const {data:{subscription}}=cloudAuth.onAuthStateChange((_event:string,next:CloudSession|null)=>{
-      setSession(next&&!next.user?.is_anonymous?next:null);
+      const authenticated=next&&!next.user?.is_anonymous?next:null;
+      setSession(authenticated);
       setCloudUserId(null);
+      setData(freshData());
+      setTab("today");
+      setSyncStatus("idle");
       setAuthReady(true);
     });
     return ()=>subscription.unsubscribe();
@@ -226,7 +230,11 @@ export default function Home() {
       if(cancelled)return;
       if(error){setSyncStatus("error");return;}
       if(remote?.data)setData(normalizeData(remote.data as AppData));
-      else await cloudDb.from("user_app_state").upsert({user_id:session.user.id,data,updated_at:new Date().toISOString()},{onConflict:"user_id"});
+      else {
+        const blank=freshData();
+        setData(blank);
+        await cloudDb.from("user_app_state").upsert({user_id:session.user.id,data:blank,updated_at:new Date().toISOString()},{onConflict:"user_id"});
+      }
       if(!cancelled){setCloudUserId(session.user.id);setSyncStatus("saved");}
     })();
     return()=>{cancelled=true;};
