@@ -73,20 +73,13 @@ type DayRecord = {
 };
 
 const defaultDay: DayRecord = {
-  checkIn: { sleepStart: "23:30", sleepEnd: "07:00", sleep: 7.5, energy: 3, mood: 4, stress: 2, focus: 3, minutes: 300 },
+  checkIn: { sleepStart: "", sleepEnd: "", sleep: 0, energy: 0, mood: 0, stress: 0, focus: 0, minutes: -1 },
   checkedIn: false,
-  tasks: [
-    { id: "sample-1", title: "Complete research methods assignment", category: "Academic", minutes: 90, energy: 28, urgency: 3, createdAt: "2026-08-05T08:00:00.000Z", status: "planned" },
-    { id: "sample-2", title: "French listening practice", category: "Language", minutes: 30, energy: 12, urgency: 2, createdAt: "2026-08-05T08:01:00.000Z", status: "planned" },
-    { id: "sample-3", title: "Post-dinner walk", category: "Health", minutes: 35, energy: 8, urgency: 1, createdAt: "2026-08-05T08:02:00.000Z", status: "planned" },
-  ],
+  tasks: [],
   reflection: null,
 };
 
-const defaultIdeas: Idea[] = [
-    { id: "idea-1", title: "Exchange travel planning tool", description: "Explore constraints and possible user workflows.", category: "Product", createdAt: "2026-08-05T09:00:00.000Z" },
-    { id: "idea-2", title: "Learn ceramics", description: "Find an introductory course for a future term.", category: "Learning", createdAt: "2026-08-05T09:01:00.000Z" },
-];
+const defaultIdeas: Idea[] = [];
 
 function dateKey(date = new Date()) {
   const year = date.getFullYear();
@@ -169,19 +162,12 @@ function sleepDuration(start: string, end: string) {
   return Math.round(((endTotal - startTotal) / 60) * 10) / 10;
 }
 
-function inferSleepTimes(hours: number) {
-  const endMinutes = 7 * 60 + 30;
-  const startMinutes = (endMinutes - Math.round(hours * 60) + 24 * 60) % (24 * 60);
-  const toClock = (minutes: number) => `${String(Math.floor(minutes / 60)).padStart(2, "0")}:${String(minutes % 60).padStart(2, "0")}`;
-  return { sleepStart: toClock(startMinutes), sleepEnd: "07:30" };
-}
-
 function todayLabel(language: "en" | "zh") {
   return new Intl.DateTimeFormat(language === "zh" ? "zh-CN" : "en-GB", { month: "long", day: "numeric", weekday: "short" }).format(new Date());
 }
 
 export default function Home() {
-  const [language, setLanguage] = useState<"en" | "zh">("en");
+  const [language, setLanguage] = useState<"en" | "zh">("zh");
   const [tab, setTab] = useState<Tab>("today");
   const [data, setData] = useState<AppData>(() => freshData());
   const [hydrated, setHydrated] = useState(false);
@@ -211,42 +197,8 @@ export default function Home() {
   },[]);
 
   useEffect(() => {
-    const storedLanguage = window.localStorage.getItem("brain-energy-language");
-    if (storedLanguage === "zh" || storedLanguage === "en") setLanguage(storedLanguage);
-    const stored = window.localStorage.getItem("brain-energy-v1");
-    if (stored) {
-      try {
-        const raw = JSON.parse(stored) as AppData & Partial<DayRecord>;
-        const parsed: AppData = raw.days ? raw : { days: { [dateKey()]: { checkIn: raw.checkIn!, checkedIn: Boolean(raw.checkedIn), tasks: raw.tasks || [], reflection: raw.reflection || null } }, ideas: raw.ideas || defaultIdeas };
-        const previousDay=Object.entries(parsed.days).sort(([a],[b])=>b.localeCompare(a))[0]?.[1];
-        const current = parsed.days[dateKey()] || { ...structuredClone(defaultDay), checkIn: previousDay?.checkIn || structuredClone(defaultDay.checkIn), tasks: [] };
-        if (!current.checkIn.sleepStart || !current.checkIn.sleepEnd) {
-          const inferred = inferSleepTimes(current.checkIn.sleep || 7.5);
-          current.checkIn = { ...current.checkIn, ...inferred };
-        }
-        current.checkIn.sleep = sleepDuration(current.checkIn.sleepStart, current.checkIn.sleepEnd);
-        if (current.reflection && typeof current.reflection.exercised !== "boolean") current.reflection.exercised = false;
-        const englishSamples: Record<string, Pick<Task, "title" | "category">> = {
-          "sample-1": { title: "Complete research methods assignment", category: "Academic" },
-          "sample-2": { title: "French listening practice", category: "Language" },
-          "sample-3": { title: "Post-dinner walk", category: "Health" },
-        };
-        current.tasks = current.tasks.map((task, index) => ({ ...task, ...(englishSamples[task.id] || {}), urgency: task.urgency || 2, createdAt: task.createdAt || new Date(Date.now() + index * 1000).toISOString() }));
-        parsed.days[dateKey()] = current;
-        if (!Array.isArray(parsed.ideas)) parsed.ideas = defaultIdeas;
-        setData(parsed);
-      } catch { /* keep safe defaults */ }
-    }
     setHydrated(true);
   }, []);
-
-  useEffect(() => {
-    if (hydrated) window.localStorage.setItem("brain-energy-v1", JSON.stringify(data));
-  }, [data, hydrated]);
-
-  useEffect(() => {
-    if (hydrated) window.localStorage.setItem("brain-energy-language", language);
-  }, [language, hydrated]);
 
   useEffect(()=>{
     if(!hydrated||!session?.user||cloudUserId===session.user.id)return;
@@ -275,7 +227,7 @@ export default function Home() {
 
   const today = dateKey();
   const day = data.days[today] || defaultDay;
-  const capacity = calculateCapacity(day.checkIn);
+  const capacity = day.checkedIn ? calculateCapacity(day.checkIn) : 0;
   const activeTasks = day.tasks.filter((task) => task.status !== "skipped");
   const plannedEnergy = activeTasks.reduce((sum, task) => sum + task.energy, 0);
   const plannedMinutes = activeTasks.reduce((sum, task) => sum + task.minutes, 0);
@@ -363,15 +315,15 @@ export default function Home() {
 
           <article className="capacity-card">
             <div className="capacity-top">
-              <div><p className="card-kicker">{zh ? "今日容量" : "TODAY’S CAPACITY"}</p><div className="capacity-number"><strong>{capacity}</strong><span>/ 100</span></div></div>
-              <div className="energy-orbit" style={{ "--capacity": `${capacity * 3.6}deg` } as React.CSSProperties}>
-                <div><span>{zh ? "状态" : "STATE"}</span><b>{capacity >= 75 ? (zh ? "高" : "High") : capacity >= 55 ? (zh ? "中等" : "Moderate") : (zh ? "低" : "Low")}</b></div>
+              <div><p className="card-kicker">{zh ? "今日容量" : "TODAY’S CAPACITY"}</p><div className="capacity-number"><strong>{day.checkedIn ? capacity : "—"}</strong>{day.checkedIn&&<span>/ 100</span>}</div></div>
+              <div className={`energy-orbit ${day.checkedIn ? "" : "empty"}`} style={{ "--capacity": `${capacity * 3.6}deg` } as React.CSSProperties}>
+                <div><span>{zh ? "状态" : "STATE"}</span><b>{day.checkedIn ? (capacity >= 75 ? (zh ? "高" : "High") : capacity >= 55 ? (zh ? "中等" : "Moderate") : (zh ? "低" : "Low")) : "—"}</b></div>
               </div>
             </div>
             <p className="capacity-note">{day.checkedIn ? (zh ? "根据睡眠时长、入睡和起床时间，以及今天的身体能量、心情、压力和专注度计算。" : "Calculated from sleep duration, bedtime, wake time, physical energy, mood, stress, and focus.") : (zh ? "完成晨间状态记录以生成今日容量估计。" : "Complete the daily check-in to generate a state-based capacity estimate.")}</p>
-            <div className="signals">
+            {day.checkedIn&&<div className="signals">
               <span>{zh ? "睡眠" : "Sleep"} {day.checkIn.sleepStart}–{day.checkIn.sleepEnd} ({day.checkIn.sleep}h)</span><span>{zh ? "睡眠时段贡献" : "Timing effect"} {sleepTimingContribution(day.checkIn) >= 0 ? "+" : ""}{sleepTimingContribution(day.checkIn)}</span><span>{zh ? "压力" : "Stress"} {day.checkIn.stress}/5</span><span>{zh ? "专注" : "Focus"} {day.checkIn.focus}/5</span>
-            </div>
+            </div>}
           </article>
 
           <div className="section-title">
@@ -379,13 +331,13 @@ export default function Home() {
             <button className="round-add" aria-label={zh ? "添加任务" : "Add task"} onClick={() => openTaskEditor()}>＋</button>
           </div>
 
-          <article className={`load-card energy-budget ${remainingEnergy === 0 ? "depleted" : ""}`}>
+          {day.checkedIn ? <article className={`load-card energy-budget ${remainingEnergy === 0 ? "depleted" : ""}`}>
             <div className="remaining-summary"><span className="load-icon">E</span><div><small>{zh ? "今日剩余能量" : "ENERGY REMAINING"}</small><strong>{remainingEnergy}<em> / {capacity}</em></strong></div></div>
             <span className="used-label">{zh ? `已使用 ${completedEnergy}` : `${completedEnergy} used`}</span>
             <div className="load-track used-track"><span style={{ width: `${usedRatio}%` }} /></div>
             <div className="task-fit"><strong>{unfinishedTasks.length === 0 ? (zh ? "今日计划已处理完毕" : "No unfinished tasks") : (zh ? `预计还可完成 ${tasksThatFit} / ${unfinishedTasks.length} 项任务` : `Estimated room for ${tasksThatFit} of ${unfinishedTasks.length} unfinished tasks`)}</strong><p>{zh ? `剩余 ${remainingEnergy} 能量 · ${remainingMinutes} 分钟。按紧急程度优先，同时满足时间和能量限制。` : `${remainingEnergy} energy · ${remainingMinutes} min remaining. Prioritized by urgency while respecting both limits.`}</p>{fittingTasks.length>0&&<p className="fit-names">{zh?"建议组合":"Likely fit"}: {fittingTasks.map(task=>zh?(sampleTitleZh[task.id]||task.title):task.title).join(" + ")}</p>}</div>
             <div className={`plan-load ${loadRatio > 100 ? "over" : ""}`}><span>{zh ? "计划总负载" : "Plan load"}</span><b>{plannedEnergy} / {capacity} · {loadRatio}%</b><small>{assessmentLabel} · {Math.round(plannedMinutes / 60 * 10) / 10}h</small></div>
-          </article>
+          </article> : <button className="empty-budget" onClick={() => setCheckInOpen(true)}><strong>{zh ? "尚未生成今日能量预算" : "No energy budget yet"}</strong><span>{zh ? "完成晨间状态记录后，这里会显示剩余能量和可完成的任务数量。" : "Complete the daily check-in to see remaining energy and estimated task capacity."}</span></button>}
 
           <div className="task-list">
             {day.tasks.map((task, index) => (
@@ -499,10 +451,14 @@ function CheckInSheet({ initial, language, onClose, onSave }: { initial: CheckIn
     next.sleep = sleepDuration(next.sleepStart, next.sleepEnd);
     setForm(next);
   };
-  const hours = Math.floor(form.minutes / 60);
-  const halfHour = form.minutes % 60 >= 30 ? 30 : 0;
-  const duration=sleepDuration(form.sleepStart,form.sleepEnd); const invalidSleep=duration<2||duration>16;
-  return <Sheet language={language} title={zh ? "晨间状态记录" : "Daily check-in"} intro={zh ? "记录用于估计今日执行容量的晨间变量。" : "Record the morning variables used to estimate today’s execution capacity."} onClose={onClose}><form onSubmit={(e) => { e.preventDefault(); if(!invalidSleep)onSave({ ...form, sleep: duration }); }}><div className="time-section"><span className="field-label">{zh ? "睡眠时间" : "Sleep interval"}</span><div className="field-row"><label className="text-field"><span>{zh ? "入睡时间" : "Sleep time"}</span><input type="time" value={form.sleepStart} onChange={e => updateSleep("sleepStart", e.target.value)} /></label><label className="text-field"><span>{zh ? "起床时间" : "Wake time"}</span><input type="time" value={form.sleepEnd} onChange={e => updateSleep("sleepEnd", e.target.value)} /></label></div><small className={`computed-value ${invalidSleep?"invalid":""}`}>{invalidSleep?(zh?"请检查时间：睡眠时长应在2–16小时之间。":"Check the interval: sleep duration must be 2–16 hours."):`${zh?"计算时长":"Calculated duration"}: ${duration} ${zh?"小时":"hours"}`}</small></div><Scale label={zh ? "身体能量" : "Physical energy"} value={form.energy} low={zh ? "低" : "Low"} high={zh ? "高" : "High"} onChange={energy => setForm({ ...form, energy })} /><Scale label={zh ? "心情" : "Mood"} value={form.mood} low={zh ? "低" : "Low"} high={zh ? "高" : "High"} onChange={mood => setForm({ ...form, mood })} /><Scale label={zh ? "压力" : "Stress"} value={form.stress} low={zh ? "低" : "Low"} high={zh ? "高" : "High"} onChange={stress => setForm({ ...form, stress })} /><Scale label={zh ? "专注度" : "Focus"} value={form.focus} low={zh ? "低" : "Low"} high={zh ? "高" : "High"} onChange={focus => setForm({ ...form, focus })} /><div className="time-section available-time"><span className="field-label">{zh ? "今天可用时间" : "Available time today"}</span><div className="duration-selects"><label><span>{zh ? "小时" : "Hours"}</span><select value={hours} onChange={e => setForm({ ...form, minutes: Number(e.target.value) * 60 + halfHour })}>{Array.from({ length: 17 }, (_, i) => <option value={i} key={i}>{i}</option>)}</select></label><label><span>{zh ? "分钟" : "Minutes"}</span><select value={halfHour} onChange={e => setForm({ ...form, minutes: hours * 60 + Number(e.target.value) })}><option value={0}>00</option><option value={30}>30</option></select></label></div></div><button className="submit-button" disabled={invalidSleep}>{zh ? "计算今日容量" : "Calculate capacity"} <span>→</span></button></form></Sheet>;
+  const hours = form.minutes < 0 ? -1 : Math.floor(form.minutes / 60);
+  const halfHour = form.minutes < 0 ? 0 : (form.minutes % 60 >= 30 ? 30 : 0);
+  const hasSleepTimes=Boolean(form.sleepStart&&form.sleepEnd);
+  const duration=hasSleepTimes?sleepDuration(form.sleepStart,form.sleepEnd):0;
+  const invalidSleep=hasSleepTimes&&(duration<2||duration>16);
+  const incomplete=!hasSleepTimes||invalidSleep||form.energy===0||form.mood===0||form.stress===0||form.focus===0||form.minutes<0;
+  const sleepMessage=!hasSleepTimes?(zh?"请选择入睡和起床时间。":"Select both sleep and wake times."):invalidSleep?(zh?"请检查时间：睡眠时长应在2–16小时之间。":"Check the interval: sleep duration must be 2–16 hours."):`${zh?"计算时长":"Calculated duration"}: ${duration} ${zh?"小时":"hours"}`;
+  return <Sheet language={language} title={zh ? "晨间状态记录" : "Daily check-in"} intro={zh ? "记录用于估计今日执行容量的晨间变量。" : "Record the morning variables used to estimate today’s execution capacity."} onClose={onClose}><form onSubmit={(e) => { e.preventDefault(); if(!incomplete)onSave({ ...form, sleep: duration }); }}><div className="time-section"><span className="field-label">{zh ? "睡眠时间" : "Sleep interval"}</span><div className="field-row"><label className="text-field"><span>{zh ? "入睡时间" : "Sleep time"}</span><input required type="time" value={form.sleepStart} onChange={e => updateSleep("sleepStart", e.target.value)} /></label><label className="text-field"><span>{zh ? "起床时间" : "Wake time"}</span><input required type="time" value={form.sleepEnd} onChange={e => updateSleep("sleepEnd", e.target.value)} /></label></div><small className={`computed-value ${invalidSleep?"invalid":""}`}>{sleepMessage}</small></div><Scale label={zh ? "身体能量" : "Physical energy"} value={form.energy} low={zh ? "低" : "Low"} high={zh ? "高" : "High"} onChange={energy => setForm({ ...form, energy })} /><Scale label={zh ? "心情" : "Mood"} value={form.mood} low={zh ? "低" : "Low"} high={zh ? "高" : "High"} onChange={mood => setForm({ ...form, mood })} /><Scale label={zh ? "压力" : "Stress"} value={form.stress} low={zh ? "低" : "Low"} high={zh ? "高" : "High"} onChange={stress => setForm({ ...form, stress })} /><Scale label={zh ? "专注度" : "Focus"} value={form.focus} low={zh ? "低" : "Low"} high={zh ? "高" : "High"} onChange={focus => setForm({ ...form, focus })} /><div className="time-section available-time"><span className="field-label">{zh ? "今天可用时间" : "Available time today"}</span><div className="duration-selects"><label><span>{zh ? "小时" : "Hours"}</span><select required value={hours} onChange={e => { const nextHours=Number(e.target.value); setForm({ ...form, minutes: nextHours<0?-1:nextHours*60 }); }}><option value={-1} disabled>{zh?"请选择":"Select"}</option>{Array.from({ length: 17 }, (_, i) => <option value={i} key={i}>{i}</option>)}</select></label><label><span>{zh ? "分钟" : "Minutes"}</span><select disabled={hours<0} value={halfHour} onChange={e => setForm({ ...form, minutes: hours * 60 + Number(e.target.value) })}><option value={0}>00</option><option value={30}>30</option></select></label></div></div><button className="submit-button" disabled={incomplete}>{zh ? "计算今日容量" : "Calculate capacity"} <span>→</span></button></form></Sheet>;
 }
 
 function TaskSheet({ initial, language, onClose, onSave }: { initial: Task | null; language: "en" | "zh"; onClose: () => void; onSave: (task: Omit<Task, "id" | "status" | "createdAt">) => void }) {
