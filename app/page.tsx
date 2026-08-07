@@ -1,6 +1,6 @@
 "use client";
 
-import { FormEvent, useEffect, useRef, useState } from "react";
+import { FormEvent, useEffect, useState } from "react";
 import cloudbase from "@cloudbase/js-sdk";
 
 const cloudApp = cloudbase.init({
@@ -430,31 +430,19 @@ export default function Home() {
 
 function AuthScreen({language,onLanguage}:{language:"en"|"zh";onLanguage:()=>void}){
   const zh=language==="zh";
-  const [email,setEmail]=useState("");
-  const [code,setCode]=useState("");
-  const [codeSent,setCodeSent]=useState(false);
-  const [message,setMessage]=useState("");
+  const [username,setUsername]=useState("");
+  const [password,setPassword]=useState("");
+  const [showPassword,setShowPassword]=useState(false);
   const [error,setError]=useState("");
   const [loading,setLoading]=useState(false);
-  const verifyOtp=useRef<null|((params:{token:string})=>Promise<{error?:{message?:string}|null}>)>(null);
-  const sendCode=async(e:FormEvent)=>{
-    e.preventDefault(); setError(""); setMessage(""); setLoading(true);
-    const {data,error:sendError}=await cloudAuth.signInWithOtp({email:email.trim().toLowerCase(),options:{shouldCreateUser:true}});
-    setLoading(false);
-    if(sendError){setError(sendError.message);return;}
-    verifyOtp.current=data.verifyOtp;
-    setCodeSent(true);
-    setMessage(zh?"验证码已发送。新邮箱会自动创建独立账户。":"Verification code sent. A new email address will create a private account automatically.");
-  };
-  const verifyCode=async(e:FormEvent)=>{
+  const signIn=async(e:FormEvent)=>{
     e.preventDefault(); setError("");
-    if(!verifyOtp.current){setError(zh?"请先发送验证码。":"Send a verification code first.");return;}
     setLoading(true);
-    const {error:verifyError}=await verifyOtp.current({token:code.trim()});
+    const {error:signInError}=await cloudAuth.signInWithPassword({username:username.trim(),password});
     setLoading(false);
-    if(verifyError)setError(verifyError.message||String(verifyError));
+    if(signInError)setError(signInError.message||String(signInError));
   };
-  return <main className="auth-shell"><button className="auth-language" onClick={onLanguage}>{zh?"EN":"中文"}</button><section className="auth-card"><div className="brand-mark"><span/></div><p className="eyebrow">BRAIN ENERGY</p><h1>{zh?"登录个人执行模型":"Sign in to your execution model"}</h1><p>{zh?"使用邮箱验证码登录。首次使用的邮箱会自动创建账户；每个账户的数据相互隔离。":"Sign in with an email verification code. A first-time email creates an account automatically; account data remains isolated."}</p><form onSubmit={codeSent?verifyCode:sendCode}><label className="text-field"><span>{zh?"邮箱":"Email"}</span><input type="email" autoComplete="email" required disabled={codeSent} value={email} onChange={e=>setEmail(e.target.value)} placeholder="name@example.com"/></label>{codeSent&&<label className="text-field"><span>{zh?"6 位验证码":"6-digit code"}</span><input inputMode="numeric" autoComplete="one-time-code" pattern="[0-9]{6}" maxLength={6} required value={code} onChange={e=>setCode(e.target.value.replace(/\D/g,""))} placeholder="123456"/></label>}{error&&<p className="auth-error">{error}</p>}{message&&<p className="auth-message">{message}</p>}<button className="submit-button" disabled={loading}>{loading?(zh?"处理中…":"Working…"):codeSent?(zh?"验证并登录":"Verify and sign in"):(zh?"发送验证码":"Send verification code")}<span>→</span></button></form>{codeSent&&<button className="auth-text-button" type="button" onClick={()=>{setCodeSent(false);setCode("");setMessage("");setError("");verifyOtp.current=null;}}>{zh?"更换邮箱或重新发送":"Change email or resend"}</button>}<small className="auth-footnote">{zh?"验证码登录不需要设置或记住密码。":"Verification-code sign-in does not require a password."}</small></section></main>;
+  return <main className="auth-shell"><button className="auth-language" onClick={onLanguage}>{zh?"EN":"中文"}</button><section className="auth-card"><div className="brand-mark"><span/></div><p className="eyebrow">BRAIN ENERGY</p><h1>{zh?"登录个人执行模型":"Sign in to your execution model"}</h1><p>{zh?"使用测试账号和密码登录。每个账号的数据相互隔离，并可在不同设备间同步。":"Sign in with your test username and password. Each account has isolated data that syncs across devices."}</p><form onSubmit={signIn}><label className="text-field"><span>{zh?"用户名":"Username"}</span><input type="text" autoComplete="username" minLength={5} maxLength={24} required value={username} onChange={e=>setUsername(e.target.value)} placeholder={zh?"输入测试账号":"Enter test username"}/></label><label className="text-field"><span>{zh?"密码":"Password"}</span><input type={showPassword?"text":"password"} autoComplete="current-password" required value={password} onChange={e=>setPassword(e.target.value)} placeholder={zh?"输入密码":"Enter password"}/></label><label className="auth-password-toggle"><input type="checkbox" checked={showPassword} onChange={e=>setShowPassword(e.target.checked)}/><span>{zh?"显示密码":"Show password"}</span></label>{error&&<p className="auth-error">{error}</p>}<button className="submit-button" disabled={loading}>{loading?(zh?"登录中…":"Signing in…"):(zh?"登录":"Sign in")}<span>→</span></button></form><small className="auth-footnote">{zh?"账号由测试组织者提供；当前不支持自行注册或找回密码。":"Accounts are provided by the test organizer. Self-registration and password recovery are not currently available."}</small></section></main>;
 }
 
 function NavButton({ active, icon, label, onClick }: { active: boolean; icon: string; label: string; onClick: () => void }) {

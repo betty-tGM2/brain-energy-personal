@@ -203,6 +203,8 @@ body { font-family:Inter,-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Aria
 .auth-tabs button { padding:9px 6px; border:0; border-bottom:2px solid transparent; background:transparent; color:#7a8697; font:inherit; font-size:9px; font-weight:650; cursor:pointer; }
 .auth-tabs button.active { border-bottom-color:#244b86; color:#244b86; }
 .auth-card form .text-field { margin-bottom:13px; }
+.auth-password-toggle { display:flex; align-items:center; gap:7px; margin:-3px 0 15px; color:#68758a; font-size:9px; cursor:pointer; }
+.auth-password-toggle input { width:14px; height:14px; margin:0; accent-color:#244b86; }
 .auth-text-button { display:block; margin:14px auto 0; padding:4px; border:0; background:transparent; color:#244b86; font:inherit; font-size:9px; cursor:pointer; text-decoration:underline; text-underline-offset:3px; }
 .secondary-button { width:100%; padding:12px; border:1px solid #cbd3df; border-radius:5px; background:#fff; color:#244b86; font-size:10px; cursor:pointer; }
 .account-tools { display:flex; align-items:center; gap:6px; margin-left:auto; }
