@@ -1,100 +1,125 @@
-# vinext-starter
+# Brain Energy
 
-A clean full-stack starter running on
-[vinext](https://github.com/cloudflare/vinext), with optional Cloudflare D1 and
-Drizzle support.
+**A personal execution system that plans around energy, not just time.**
 
-## Prerequisites
+Most task managers assume that an open hour is a usable hour. Brain Energy starts from a different question: **how much mental capacity do I realistically have today, and which tasks fit inside it?**
 
-- Node.js `>=22.13.0`
+![Brain Energy product preview](public/og.png)
 
-## Quick Start
+## Why I built it
+
+I often had more tasks than usable energy. A conventional to-do list could show everything I wanted to finish, but it could not explain why an apparently reasonable plan repeatedly failed.
+
+Brain Energy turns daily state, task demand, and reflection into a practical feedback loop:
+
+**Check in → estimate capacity → choose tasks → execute → reflect → learn from history**
+
+This is an independent product project focused on product thinking, personal analytics, and AI-assisted development.
+
+## What it does
+
+- **Daily state check-in** using sleep duration and timing, physical energy, mood, stress, focus, and available time
+- **Capacity estimate** that converts those inputs into a daily energy budget
+- **Task library** with category, duration, energy cost, urgency, and optional deadlines
+- **Today planning** that shows whether the selected workload fits both remaining energy and time
+- **Idea Vault** that keeps ideas separate from commitments until the user intentionally promotes them
+- **Execution tracking** for planned, started, completed, and skipped tasks
+- **Evening reflection** that records remaining energy, exercise, outcomes, and the main reason work was unfinished
+- **History and analysis** based only on genuine saved records
+- **Personalization threshold** that waits for at least 10 eligible observations before treating the data as sufficient for a personal model
+- **JSON backup and restore**
+- **Chinese and English interface**
+- **Authenticated cloud persistence** with per-user data separation
+
+## Product decisions
+
+### Energy and time are separate constraints
+
+A task may fit into the calendar but still exceed the user's remaining cognitive capacity. Brain Energy evaluates both instead of treating available time as the only budget.
+
+### Ideas are not automatically tasks
+
+The Idea Vault reduces the pressure created when every interesting thought becomes an immediate commitment.
+
+### Unfinished work needs context
+
+An incomplete plan does not always mean low energy. The reflection distinguishes energy limits from insufficient time, changed priorities, and inaccurate estimates so future analysis does not learn the wrong lesson.
+
+### Personalization should wait for evidence
+
+The product begins with a transparent baseline heuristic. It collects complete morning-and-evening observations before a future personalized model is considered ready.
+
+## Current model
+
+The baseline capacity estimate combines:
+
+- sleep duration
+- bedtime and wake-time effects
+- self-reported physical energy
+- mood
+- stress
+- focus
+
+Sleep clock times use circular features so times around midnight remain mathematically close. Capacity is currently a planning estimate, not a medical or clinical measurement.
+
+## Tech stack
+
+- Next.js and React
+- TypeScript
+- CloudBase authentication and relational data storage
+- Supabase-compatible migration experiments
+- Cloudflare/Vite deployment tooling
+- Responsive custom CSS
+- Node test coverage for rendered product states
+
+## Run locally
+
+### Requirements
+
+- Node.js 22.13 or newer
+- A CloudBase application and publishable access key
+
+### Setup
 
 ```bash
+git clone https://github.com/betty-tGM2/brain-energy-personal.git
+cd brain-energy-personal
 npm install
+cp .env.example .env.local
 npm run dev
+```
+
+Add your CloudBase publishable key to `.env.local`:
+
+```env
+NEXT_PUBLIC_CLOUDBASE_ACCESS_KEY=your-publishable-key
+```
+
+Build and test:
+
+```bash
 npm run build
+npm test
 ```
 
-This starter does not use `wrangler.jsonc`.
+## Privacy
 
-## Included Shape
+User records are stored per authenticated user. The repository contains no production credentials; configuration values must be supplied through environment variables.
 
-- edit site code under `app/`
-- `.openai/hosting.json` declares optional Sites D1 and R2 bindings
-- `vite.config.ts` simulates declared bindings for local development
-- `db/schema.ts` starts intentionally empty
-- `examples/d1/` contains an optional D1 example surface
-- `drizzle.config.ts` supports local migration generation when needed
+Because the app records personal wellbeing and productivity signals, it is designed as a self-reflection tool—not a medical device or diagnostic system.
 
-## Workspace Auth Headers
+## Project status
 
-Signed-in visitors receive both `oai-authenticated-user-id` and `oai-authenticated-user-email`. Private Sites require every visitor to sign in; public Sites may also have anonymous visitors, for whom neither header is present.
+Brain Energy is a working product prototype under active iteration. The current version validates the end-to-end experience and data model. Future work includes evaluating the personalized model with sufficient longitudinal data, improving insights, and reducing check-in friction.
 
-The user ID is stable for the same user on the same Site and different across Sites. Email and name are intended for display or contact purposes.
+## What this project demonstrates
 
-SIWC-authenticated workspace sites may also receive
-`oai-authenticated-user-full-name` when the user's SIWC profile has a non-empty
-`name` claim. The full-name value is percent-encoded UTF-8 and is accompanied by
-`oai-authenticated-user-full-name-encoding: percent-encoded-utf-8`.
+- Translating an everyday problem into a structured product system
+- Designing a full behavioral feedback loop rather than a single feature
+- Combining product design, data modeling, and statistical thinking
+- Building authentication, persistence, responsive UI, and bilingual UX
+- Using user feedback to identify privacy, customization, and input-friction risks
 
-Treat the full name as optional and fall back to email when it is absent:
+---
 
-```tsx
-import { headers } from "next/headers";
-
-export default async function Home() {
-  const requestHeaders = await headers();
-  const userId = requestHeaders.get("oai-authenticated-user-id");
-  const email = requestHeaders.get("oai-authenticated-user-email");
-  const encodedFullName = requestHeaders.get("oai-authenticated-user-full-name");
-  const fullName =
-    encodedFullName &&
-    requestHeaders.get("oai-authenticated-user-full-name-encoding") ===
-      "percent-encoded-utf-8"
-      ? decodeURIComponent(encodedFullName)
-      : null;
-
-  const displayName = fullName ?? email;
-  // ...
-}
-```
-
-## Optional Dispatch-Owned ChatGPT Sign-In
-
-Import the ready-to-use helpers from `app/chatgpt-auth.ts` when the site needs
-optional or required ChatGPT sign-in:
-
-- Use `getChatGPTUser()` for optional signed-in UI.
-- Use `requireChatGPTUser(returnTo)` for server-rendered pages that should send
-  anonymous visitors through Sign in with ChatGPT.
-- Use `chatGPTSignInPath(returnTo)` and `chatGPTSignOutPath(returnTo)` for
-  browser links or actions.
-- Pass a same-origin relative `returnTo` path for the destination after sign-in
-  or sign-out. The helper validates and safely encodes it.
-- Mark protected pages with `export const dynamic = "force-dynamic"` because
-  they depend on per-request identity headers.
-
-Dispatch owns `/signin-with-chatgpt`, `/signout-with-chatgpt`, `/callback`, the
-OAuth cookies, and identity header injection. Do not implement app routes for
-those reserved paths. Routes that do not import and call the helper remain
-anonymous-compatible.
-
-SIWC establishes identity only; it does not prove workspace membership. Use the
-Sites hosting platform's access policy controls for workspace-wide restrictions,
-or enforce explicit server-side membership or allowlist checks.
-
-Use SIWC for account pages, user-specific dashboards, saved records, and write
-actions tied to the current ChatGPT user. Leave public content anonymous.
-
-## Useful Commands
-
-- `npm run dev`: start local development
-- `npm run build`: verify the vinext build output
-- `npm test`: build the starter and verify its rendered loading skeleton
-- `npm run db:generate`: generate Drizzle migrations after schema changes
-
-## Learn More
-
-- [vinext Documentation](https://github.com/cloudflare/vinext)
-- [Drizzle D1 Guide](https://orm.drizzle.team/docs/get-started/d1-new)
+Built by [Betty Liu](https://github.com/betty-tGM2).
